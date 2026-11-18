@@ -84,6 +84,17 @@ run twice.
 This protects a leaked dump or backup, not a server whose files are taken: the
 key comes from `wp-config.php` (or `WP_ENCRYPTION_KEY`).
 
+Where the key comes from, in order: a key passed to the `Cipher`, then
+`WP_ENCRYPTION_KEY`, then the four `*_KEY` constants of `wp-config.php`. Those
+are used only when they are secret. A site still on the "put your unique phrase
+here" placeholders, with an empty one, or with one value pasted into two keys or
+salts would get a key anyone can work out, so it uses `wp_salt( 'auth' )` and
+`wp_salt( 'secure_auth' )` instead: core swaps such values for a random secret it
+keeps in the database. A site with real keys keeps the key it has always had.
+Values a placeholder site encrypted before still decrypt (under the old, public
+key), and `$cipher->reencrypt( $stored )` or saving them again moves them to the
+new one.
+
 ## Keys and codes
 
 ```php

@@ -114,13 +114,50 @@ final class Keys {
 	}
 
 	/**
+	 * The four wp-config.php constants the encryption key is made from.
+	 *
+	 * @since 1.0.0
+	 */
+	private const KEY_CONSTANTS = array( 'AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY' );
+
+	/**
+	 * Every constant core compares when it looks for duplicated salts.
+	 *
+	 * @since 1.0.0
+	 */
+	private const SALT_CONSTANTS = array(
+		'AUTH_KEY',
+		'AUTH_SALT',
+		'SECURE_AUTH_KEY',
+		'SECURE_AUTH_SALT',
+		'LOGGED_IN_KEY',
+		'LOGGED_IN_SALT',
+		'NONCE_KEY',
+		'NONCE_SALT',
+		'SECRET_KEY',
+		'SECRET_SALT',
+	);
+
+	/**
+	 * What wp-config-sample.php ships in every key and salt.
+	 *
+	 * @since 1.0.0
+	 */
+	private const PLACEHOLDER = 'put your unique phrase here';
+
+	/**
 	 * A 32-byte encryption key.
 	 *
 	 * A key of the caller's own is hashed to length. Otherwise the
 	 * `WP_ENCRYPTION_KEY` constant when it is defined, which lets a site
 	 * keep the key out of its salts and rotate one without the other. Then
-	 * the four `*_KEY` constants of wp-config.php, and `wp_salt()` as a last
-	 * resort for a site that defines them some other way.
+	 * the four `*_KEY` constants of wp-config.php -- but only when they are
+	 * secret. A site still on the "put your unique phrase here" placeholders,
+	 * or with the same value pasted into two of them, would otherwise get a
+	 * key anyone can work out, so it gets `wp_salt()` instead, which is what
+	 * core does for its own cookies: it swaps such values for a random
+	 * secret it generates once and keeps in the database. A site that
+	 * defines none of the constants gets `wp_salt()` too.
 	 *
 	 * @since 1.0.0
 	 *
@@ -139,14 +176,10 @@ final class Keys {
 			return hash( 'sha256', (string) constant( self::ENCRYPTION_CONSTANT ), true );
 		}
 
-		$combined = '';
+		$combined = self::constants();
 
-		foreach ( array( 'AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY' ) as $name ) {
-			$combined .= defined( $name ) ? (string) constant( $name ) : '';
-		}
-
-		if ( '' === $combined && function_exists( 'wp_salt' ) ) {
-			$combined = wp_salt() . wp_salt( 'secure_auth' );
+		if ( '' === $combined || ! self::constants_are_secret() ) {
+			$combined = function_exists( 'wp_salt' ) ? wp_salt( 'auth' ) . wp_salt( 'secure_auth' ) : '';
 		}
 
 		if ( '' === $combined ) {
@@ -154,5 +187,99 @@ final class Keys {
 		}
 
 		return hash( 'sha256', $combined, true );
+	}
+
+	/**
+	 * Keys the site's values may still be encrypted under.
+	 *
+	 * Before the placeholder check above, a site on the placeholder salts
+	 * encrypted with a key made from them. That key is public, so trying it
+	 * gives nothing away, and it lets those values be read once more and
+	 * written back under the real key. Empty for every other site.
+	 *
+	 * @since 1.0.0
+	 * @internal For {@see Encryption\Cipher}.
+	 *
+	 * @param string|null $key A key of the caller's own, or null for the site's.
+	 *
+	 * @return string[] 32 raw bytes each.
+	 */
+	public static function previous_encryption( #[\SensitiveParameter] ?string $key = null ): array {
+		if ( null !== $key && '' !== $key ) {
+			return array();
+		}
+
+		if ( defined( self::ENCRYPTION_CONSTANT ) && ! empty( constant( self::ENCRYPTION_CONSTANT ) ) ) {
+			return array();
+		}
+
+		$combined = self::constants();
+
+		if ( '' === $combined || self::constants_are_secret() ) {
+			return array();
+		}
+
+		return array( hash( 'sha256', $combined, true ) );
+	}
+
+	/**
+	 * The four `*_KEY` constants, joined; '' when none is defined.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return string
+	 */
+	private static function constants(): string {
+		$combined = '';
+
+		foreach ( self::KEY_CONSTANTS as $name ) {
+			$combined .= defined( $name ) ? (string) constant( $name ) : '';
+		}
+
+		return $combined;
+	}
+
+	/**
+	 * Whether every defined `*_KEY` constant is a secret.
+	 *
+	 * The same test core's `wp_salt()` applies: not empty, not the
+	 * placeholder (in English or in the site's language), and not a value
+	 * that appears in two of the keys and salts.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return bool
+	 */
+	private static function constants_are_secret(): bool {
+		$seen = array();
+
+		foreach ( self::SALT_CONSTANTS as $name ) {
+			if ( defined( $name ) ) {
+				$value          = (string) constant( $name );
+				$seen[ $value ] = ( $seen[ $value ] ?? 0 ) + 1;
+			}
+		}
+
+		$placeholders = array( self::PLACEHOLDER );
+
+		if ( function_exists( '__' ) ) {
+			// Core's own string in core's text domain, as wp_salt() checks it.
+			// phpcs:ignore WordPress.WP.I18n.MissingArgDomain
+			$placeholders[] = __( 'put your unique phrase here' );
+		}
+
+		foreach ( self::KEY_CONSTANTS as $name ) {
+			if ( ! defined( $name ) ) {
+				continue;
+			}
+
+			$value = (string) constant( $name );
+
+			if ( '' === $value || in_array( $value, $placeholders, true ) || $seen[ $value ] > 1 ) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

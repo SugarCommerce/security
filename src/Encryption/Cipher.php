@@ -93,6 +93,13 @@ final class Cipher {
 	private string $key;
 
 	/**
+	 * Keys values may still be under, tried only when the key fails.
+	 *
+	 * @var string[]
+	 */
+	private array $previous = array();
+
+	/**
 	 * What every encrypted value starts with.
 	 *
 	 * @var string
@@ -117,7 +124,8 @@ final class Cipher {
 		}
 
 		$this->marker = '__' . strtoupper( $prefix ) . '_ENCRYPTED__';
-		$this->key    = Keys::encryption( $key );
+		$this->key      = Keys::encryption( $key );
+		$this->previous = Keys::previous_encryption( $key );
 	}
 
 	/**
@@ -155,7 +163,8 @@ final class Cipher {
 	 * @return void
 	 */
 	public function change_key( #[\SensitiveParameter] ?string $key = null ): void {
-		$this->key = Keys::encryption( $key );
+		$this->key      = Keys::encryption( $key );
+		$this->previous = Keys::previous_encryption( $key );
 	}
 
 	/**
@@ -212,7 +221,10 @@ final class Cipher {
 	 *
 	 * Reads both the authenticated format and the legacy one. A value
 	 * without the marker is returned as it is, so plain values stored
-	 * before encryption was switched on keep working.
+	 * before encryption was switched on keep working. A value the key does
+	 * not open is tried under the key a site on the placeholder salts used
+	 * before ({@see Keys::previous_encryption()}), so it can be read and
+	 * saved again under the new one.
 	 *
 	 * @since 1.0.0
 	 *
@@ -227,12 +239,21 @@ final class Cipher {
 		}
 
 		$payload = substr( $value, strlen( $this->marker ) );
+		$result  = null;
 
-		if ( str_starts_with( $payload, self::FORMAT ) ) {
-			return $this->decrypt_authenticated( substr( $payload, strlen( self::FORMAT ) ) );
+		foreach ( array( $this->key, ...$this->previous ) as $key ) {
+			$plain = str_starts_with( $payload, self::FORMAT )
+				? $this->decrypt_authenticated( substr( $payload, strlen( self::FORMAT ) ), $key )
+				: $this->decrypt_legacy( $payload, $key );
+
+			if ( is_string( $plain ) ) {
+				return $plain;
+			}
+
+			$result ??= $plain;
 		}
 
-		return $this->decrypt_legacy( $payload );
+		return $result;
 	}
 
 	/**
@@ -309,10 +330,11 @@ final class Cipher {
 	 * @since 1.0.0
 	 *
 	 * @param string $payload Base64 of nonce, tag and ciphertext.
+	 * @param string $key     32 raw bytes.
 	 *
 	 * @return string|WP_Error
 	 */
-	private function decrypt_authenticated( string $payload ): string|WP_Error {
+	private function decrypt_authenticated( string $payload, #[\SensitiveParameter] string $key ): string|WP_Error {
 		$data = base64_decode( $payload, true );
 
 		if ( false === $data || strlen( $data ) <= self::IV_LENGTH + self::TAG_LENGTH ) {
@@ -322,7 +344,7 @@ final class Cipher {
 		$iv         = substr( $data, 0, self::IV_LENGTH );
 		$tag        = substr( $data, self::IV_LENGTH, self::TAG_LENGTH );
 		$ciphertext = substr( $data, self::IV_LENGTH + self::TAG_LENGTH );
-		$decrypted  = openssl_decrypt( $ciphertext, self::ALGORITHM, $this->key, OPENSSL_RAW_DATA, $iv, $tag );
+		$decrypted  = openssl_decrypt( $ciphertext, self::ALGORITHM, $key, OPENSSL_RAW_DATA, $iv, $tag );
 
 		// False means the tag did not verify: the ciphertext was cut short,
 		// corrupted, or deliberately changed. Report it rather than return
@@ -343,10 +365,11 @@ final class Cipher {
 	 * @since 1.0.0
 	 *
 	 * @param string $payload Base64 of IV and ciphertext.
+	 * @param string $key     32 raw bytes.
 	 *
 	 * @return string|WP_Error
 	 */
-	private function decrypt_legacy( string $payload ): string|WP_Error {
+	private function decrypt_legacy( string $payload, #[\SensitiveParameter] string $key ): string|WP_Error {
 		$data      = base64_decode( $payload, true );
 		$iv_length = (int) openssl_cipher_iv_length( self::LEGACY_ALGORITHM );
 
@@ -354,7 +377,7 @@ final class Cipher {
 			return new WP_Error( 'decryption_error', 'Invalid encrypted data' );
 		}
 
-		$decrypted = openssl_decrypt( substr( $data, $iv_length ), self::LEGACY_ALGORITHM, $this->key, OPENSSL_RAW_DATA, substr( $data, 0, $iv_length ) );
+		$decrypted = openssl_decrypt( substr( $data, $iv_length ), self::LEGACY_ALGORITHM, $key, OPENSSL_RAW_DATA, substr( $data, 0, $iv_length ) );
 
 		if ( false === $decrypted ) {
 			return new WP_Error( 'decryption_error', 'Decryption failed: ' . openssl_error_string() );
