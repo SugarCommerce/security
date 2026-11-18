@@ -102,18 +102,26 @@ final class Notice {
 		$current = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 		$there   = '' !== $page && $current && str_contains( (string) $current->id, $page );
 
-		printf(
-			'<div class="notice notice-warning %1$s"><p><strong>%2$s</strong> %3$s</p>%4$s</div>',
-			esc_attr( $this->turnstile->option( 'class' ) . '-notice' ),
-			esc_html( $this->message() ),
-			esc_html( $this->detail() ),
-			$there || '' === $url
-				? ''
-				: sprintf(
-					'<p><a class="button" href="%1$s">%2$s</a></p>',
-					esc_url( $url ),
-					esc_html( $this->turnstile->message( 'settings_button' ) )
-				)
+		// Core's markup and wp_kses_post(), and its wp_admin_notice_args and
+		// _markup filters. Two paragraphs, so core does not wrap it in one.
+		wp_admin_notice(
+			sprintf(
+				'<p><strong>%1$s</strong> %2$s</p>%3$s',
+				esc_html( $this->message() ),
+				esc_html( $this->detail() ),
+				$there || '' === $url
+					? ''
+					: sprintf(
+						'<p><a class="button" href="%1$s">%2$s</a></p>',
+						esc_url( $url ),
+						esc_html( $this->turnstile->message( 'settings_button' ) )
+					)
+			),
+			array(
+				'type'               => 'warning',
+				'additional_classes' => array( esc_attr( $this->turnstile->option( 'class' ) . '-notice' ) ),
+				'paragraph_wrap'     => false,
+			)
 		);
 	}
 }

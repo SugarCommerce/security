@@ -12,6 +12,8 @@ declare( strict_types=1 );
 
 namespace SugarCommerce\Security\Turnstile;
 
+use SugarCommerce\Plugin\Assets;
+
 /**
  * Where the check sits in a form, and Cloudflare's script for it.
  *
@@ -299,6 +301,10 @@ final class Widget {
 	/**
 	 * Where the module is: the `module_url` option, or the library's own copy.
 	 *
+	 * The copy's URL comes from Plugin\Assets, which finds this package
+	 * wherever the host put it: a vendor/ folder, a Strauss copy, a
+	 * symlinked plugin.
+	 *
 	 * @return string
 	 * @since 1.0.0
 	 */
@@ -309,94 +315,6 @@ final class Widget {
 			return $given;
 		}
 
-		return self::url_of( self::normalize( dirname( __DIR__, 2 ) . '/assets/js/turnstile.js' ) ) ?? '';
-	}
-
-	/**
-	 * The URL of a file, if WordPress serves it.
-	 *
-	 * The library is installed wherever its host put it -- a vendor/ folder,
-	 * a prefixed copy made by Strauss, a plugin of its own -- so the URL is
-	 * worked out from where the file is: under the content directory, or
-	 * failing that under the WordPress root, or through the map core keeps
-	 * of symlinked plugins.
-	 *
-	 * @param string $path A normalised absolute path.
-	 *
-	 * @return string|null Null when the file is missing or is somewhere
-	 *                     WordPress does not serve.
-	 * @since 1.0.0
-	 */
-	private static function url_of( string $path ): ?string {
-		if ( ! is_file( $path ) ) {
-			return null;
-		}
-
-		if ( defined( 'WP_CONTENT_DIR' ) && function_exists( 'content_url' ) ) {
-			$url = self::url_within( $path, self::normalize( (string) WP_CONTENT_DIR ), content_url() );
-
-			if ( null !== $url ) {
-				return $url;
-			}
-		}
-
-		if ( defined( 'ABSPATH' ) && function_exists( 'site_url' ) ) {
-			$url = self::url_within( $path, self::normalize( (string) ABSPATH ), site_url( '/' ) );
-
-			if ( null !== $url ) {
-				return $url;
-			}
-		}
-
-		// A symlinked plugin: the path is the real one, which can be anywhere
-		// on disk. Core keeps a map from each plugin's path under the content
-		// directory to its real one.
-		foreach ( (array) ( $GLOBALS['wp_plugin_paths'] ?? array() ) as $plugin_path => $real_path ) {
-			$real_path = rtrim( self::normalize( (string) $real_path ), '/' );
-
-			if ( '' === $real_path || ! str_starts_with( $path, $real_path . '/' ) || ! defined( 'WP_CONTENT_DIR' ) || ! function_exists( 'content_url' ) ) {
-				continue;
-			}
-
-			$url = self::url_within( rtrim( self::normalize( (string) $plugin_path ), '/' ) . substr( $path, strlen( $real_path ) ), self::normalize( (string) WP_CONTENT_DIR ), content_url() );
-
-			if ( null !== $url ) {
-				return $url;
-			}
-		}
-
-		return null;
-	}
-
-	/**
-	 * The URL of a path, if it sits under a folder whose URL is known.
-	 *
-	 * @param string $path     Normalised absolute path.
-	 * @param string $base     Normalised base folder.
-	 * @param string $base_url The base folder's URL.
-	 *
-	 * @return string|null
-	 * @since 1.0.0
-	 */
-	private static function url_within( string $path, string $base, string $base_url ): ?string {
-		$base = rtrim( $base, '/' );
-
-		if ( '' === $base || ! str_starts_with( $path, $base . '/' ) ) {
-			return null;
-		}
-
-		return rtrim( $base_url, '/' ) . substr( $path, strlen( $base ) );
-	}
-
-	/**
-	 * A path with forward slashes, as core's wp_normalize_path() gives it.
-	 *
-	 * @param string $path A path.
-	 *
-	 * @return string
-	 * @since 1.0.0
-	 */
-	private static function normalize( string $path ): string {
-		return function_exists( 'wp_normalize_path' ) ? wp_normalize_path( $path ) : str_replace( '\\', '/', $path );
+		return Assets::url( __FILE__, 'js/turnstile.js' ) ?? '';
 	}
 }

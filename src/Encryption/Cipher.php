@@ -41,6 +41,14 @@ use WP_Error;
  *     $stored = $cipher->encrypt( $key );
  *     $key    = $cipher->decrypt( $stored );
  *
+ * Code with a marker of its own -- one already in its stored values, say --
+ * keeps the marker and has this class do the encryption: seal() and open()
+ * are the same AES-256-GCM payload without any marker, and also_open() lets
+ * values made under a key derived some other way still be read.
+ *
+ *     $payload = $cipher->seal( $json );          // base64 of nonce, tag, ciphertext
+ *     $json    = $cipher->open( $payload );       // or a WP_Error
+ *
  * @since 1.0.0
  */
 final class Cipher {
@@ -100,6 +108,15 @@ final class Cipher {
 	private array $previous = array();
 
 	/**
+	 * Keys the caller said its older values are under ({@see self::also_open()}).
+	 *
+	 * Kept apart from the site's previous keys so a change of key keeps them.
+	 *
+	 * @var string[]
+	 */
+	private array $older = array();
+
+	/**
 	 * What every encrypted value starts with.
 	 *
 	 * @var string
@@ -143,6 +160,33 @@ final class Cipher {
 	}
 
 	/**
+	 * Also read values sealed under these keys.
+	 *
+	 * For values written before this cipher was used, by code that made its
+	 * key some other way: each key is tried, after this cipher's own, only
+	 * when that one fails. GCM authenticates, so a wrong key fails cleanly
+	 * and trying another gives nothing away. Nothing is ever written under
+	 * them -- save a value again to move it to this cipher's key.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string ...$keys Key material, hashed to length as a key of the
+	 *                        caller's own is ({@see Keys::encryption()}).
+	 *                        Empty ones are skipped.
+	 *
+	 * @return static
+	 */
+	public function also_open( #[\SensitiveParameter] string ...$keys ): static {
+		foreach ( $keys as $key ) {
+			if ( '' !== $key ) {
+				$this->older[] = Keys::encryption( $key );
+			}
+		}
+
+		return $this;
+	}
+
+	/**
 	 * What every encrypted value starts with.
 	 *
 	 * @since 1.0.0
@@ -182,6 +226,26 @@ final class Cipher {
 			return $value;
 		}
 
+		$sealed = $this->seal( $value );
+
+		return is_string( $sealed ) ? $this->marker . self::FORMAT . $sealed : $sealed;
+	}
+
+	/**
+	 * Encrypt a value, without the marker.
+	 *
+	 * For code that marks its stored values its own way. The payload is
+	 * what encrypt() puts after its marker: base64 of a 12-byte nonce, the
+	 * 16-byte tag and the ciphertext, under AES-256-GCM.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $value The plain value. '' is sealed too: the caller
+	 *                      decides whether emptiness is worth hiding.
+	 *
+	 * @return string|WP_Error Base64, or why not.
+	 */
+	public function seal( #[\SensitiveParameter] string $value ): string|WP_Error {
 		try {
 			$iv = random_bytes( self::IV_LENGTH );
 		} catch ( Exception $e ) {
@@ -195,7 +259,36 @@ final class Cipher {
 			return new WP_Error( 'encryption_error', 'Encryption failed: ' . openssl_error_string() );
 		}
 
-		return $this->marker . self::FORMAT . base64_encode( $iv . $tag . $encrypted );
+		return base64_encode( $iv . $tag . $encrypted );
+	}
+
+	/**
+	 * Decrypt a payload made by seal().
+	 *
+	 * Tried under this cipher's key, then the site's previous one, then any
+	 * given to also_open().
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $payload Base64 of nonce, tag and ciphertext.
+	 *
+	 * @return string|WP_Error The plain value, or why not -- never anything
+	 *                         derived from a payload that failed its check.
+	 */
+	public function open( string $payload ): string|WP_Error {
+		$result = null;
+
+		foreach ( $this->keys() as $key ) {
+			$plain = $this->decrypt_authenticated( $payload, $key );
+
+			if ( is_string( $plain ) ) {
+				return $plain;
+			}
+
+			$result ??= $plain;
+		}
+
+		return $result;
 	}
 
 	/**
@@ -239,12 +332,15 @@ final class Cipher {
 		}
 
 		$payload = substr( $value, strlen( $this->marker ) );
-		$result  = null;
 
-		foreach ( array( $this->key, ...$this->previous ) as $key ) {
-			$plain = str_starts_with( $payload, self::FORMAT )
-				? $this->decrypt_authenticated( substr( $payload, strlen( self::FORMAT ) ), $key )
-				: $this->decrypt_legacy( $payload, $key );
+		if ( str_starts_with( $payload, self::FORMAT ) ) {
+			return $this->open( substr( $payload, strlen( self::FORMAT ) ) );
+		}
+
+		$result = null;
+
+		foreach ( $this->keys() as $key ) {
+			$plain = $this->decrypt_legacy( $payload, $key );
 
 			if ( is_string( $plain ) ) {
 				return $plain;
@@ -254,6 +350,17 @@ final class Cipher {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Every key a value may be under, this cipher's first.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return string[] 32 raw bytes each.
+	 */
+	private function keys(): array {
+		return array( $this->key, ...$this->previous, ...$this->older );
 	}
 
 	/**
@@ -337,7 +444,10 @@ final class Cipher {
 	private function decrypt_authenticated( string $payload, #[\SensitiveParameter] string $key ): string|WP_Error {
 		$data = base64_decode( $payload, true );
 
-		if ( false === $data || strlen( $data ) <= self::IV_LENGTH + self::TAG_LENGTH ) {
+		// Shorter than a nonce and a whole tag is refused before OpenSSL sees
+		// it, because OpenSSL would accept a shorter tag -- a weaker check.
+		// Exactly that long is an empty value, which seal() can make.
+		if ( false === $data || strlen( $data ) < self::IV_LENGTH + self::TAG_LENGTH ) {
 			return new WP_Error( 'decryption_error', 'Invalid encrypted data' );
 		}
 

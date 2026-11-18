@@ -215,6 +215,8 @@ final class Record {
 	 * @since 1.0.0
 	 */
 	private static function fingerprint( #[SensitiveParameter] string $secret ): string {
-		return substr( hash_hmac( 'sha256', $secret, wp_salt( 'auth' ) ), 0, 12 );
+		// Core's wp_hash() with sha256 is hash_hmac( 'sha256', $secret,
+		// wp_salt( 'auth' ) ): the same twelve characters as before.
+		return substr( wp_hash( $secret, 'auth', 'sha256' ), 0, 12 );
 	}
 }

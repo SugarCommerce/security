@@ -81,6 +81,22 @@ decrypt instead of decrypting to something else.
 `$new->reencrypt( $stored, $old )` moves a value to a new key and is safe to
 run twice.
 
+This is the family's one copy of encryption: other packages call it rather than
+carry their own (`sugarcommerce/fields` encrypts its `encrypted` fields here).
+Code whose stored values already carry a marker of its own keeps the marker and
+uses the unmarked payload, the same AES-256-GCM nonce, tag and ciphertext that
+follows `__PREFIX_ENCRYPTED__v2:`:
+
+```php
+$cipher = ( new Cipher( 'myplugin' ) )->also_open( $material_of_the_old_key );
+
+$stored = 'mine:' . $cipher->seal( $value );           // written under the site key
+$value  = $cipher->open( substr( $stored, 5 ) );        // or a WP_Error
+```
+
+`also_open()` takes the key material an older copy hashed into its key, so its
+values still read; nothing is written under it.
+
 This protects a leaked dump or backup, not a server whose files are taken: the
 key comes from `wp-config.php` (or `WP_ENCRYPTION_KEY`).
 
@@ -173,7 +189,7 @@ Nothing of Cloudflare's is loaded until the owner switches it on with both
 keys, and then only on a page with a protected form. A token is held to the
 site's hostnames, the form it was made for, and once per request. `fail_open`
 decides what a Cloudflare outage or a refused key does; either way the owner is
-told by an admin notice and Site Health. `status()` gives a settings card its
+told by an admin notice (core's `wp_admin_notice()`) and Site Health. `status()` gives a settings card its
 word and tone, `key_test()->run()` backs a Test Keys button, `clean_key()` is a
 settings field's sanitize callback, and a paragraph is offered to the privacy
 policy guide. The form's script draws the widget with `mount()` from the
@@ -226,7 +242,10 @@ can see a link expire, a window roll over or a code change without waiting:
 From `arraypress/wp-signed-tokens`, `wp-encryption-utils`, `wp-generate-utils`,
 `wp-rate-limit` and `wp-turnstile`. Tokens already emailed, values already
 encrypted and counters already kept carry on working: the key derivations and
-stored formats are unchanged.
+stored formats are unchanged. Keys, site digests, rate-limit counter names and
+Turnstile key fingerprints are now made by core's `wp_hash( $data, $scheme,
+'sha256' )`, which is byte for byte the HMAC they were made with before
+(`tests/CoreHashTest.php` holds values from the old code).
 
 | Old | New |
 |---|---|
@@ -247,10 +266,11 @@ stored formats are unchanged.
 | `Uuid::is_valid( $uuid, $version )` | unchanged; a version outside 1–8 is false, and a trailing newline is refused |
 | `ArrayPress\RateLimit\*` | `SugarCommerce\Security\RateLimit\*` — `Limiter`, `Limit`, `Decision`, `Store`, `Stores\*` |
 | `ArrayPress\Turnstile\*` | `SugarCommerce\Security\Turnstile\*` — every class, option and hook name |
-| `arraypress/wp-composer-assets` (Turnstile's module URL) | not needed: the library works out its own |
+| `arraypress/wp-composer-assets` (Turnstile's module URL) | `SugarCommerce\Plugin\Assets`, required (the family's one asset-URL resolver) |
+| `Uuid::v4()` | unchanged; now core's `wp_generate_uuid4()`. `is_valid()` stays its own, stricter than `wp_is_uuid()` |
 
-New: `Signer::derived()`, `Keys::derive()`, `Cipher::encrypt_once()` and
-`reencrypt()`, `Secrets::cipher()`, `Random::id()`, `ApiKey::digest()` and its
+New: `Signer::derived()`, `Keys::derive()`, `Cipher::encrypt_once()`,
+`reencrypt()`, `seal()`, `open()` and `also_open()`, `Secrets::cipher()`, `Random::id()`, `ApiKey::digest()` and its
 `$shown`, `Slug::clean()`, `RateLimit\Rules`, `Stores\Apcu`, Turnstile's
 `ErrorCode`, `Verification::errors()` and `has()`, `Verifier::passes()`,
 `for_hostnames()`, `for_action()` and `is_test_secret( $secret, true )`, and

@@ -65,19 +65,31 @@ final class Keys {
 	 * @throws \RuntimeException When the site has no usable salt.
 	 */
 	public static function signing( string $purpose = 'default' ): string {
-		return hash_hmac( 'sha256', self::SIGNING_CONTEXT . $purpose, self::salt() );
+		return self::hash( self::SIGNING_CONTEXT . $purpose );
 	}
 
 	/**
-	 * The site's auth salt, when it is one worth deriving from.
+	 * HMAC-SHA256 of a value under the site's auth salt.
+	 *
+	 * Core's `wp_hash( $data, 'auth', 'sha256' )` is exactly
+	 * `hash_hmac( 'sha256', $data, wp_salt( 'auth' ) )`, so every key this
+	 * class has handed out is the same bytes through it (as long as nothing
+	 * replaces the pluggable wp_hash(), which would change core's own
+	 * cookies too). The guard stays in
+	 * front: core never returns its placeholder from wp_salt() (it swaps one
+	 * for a generated, stored secret), but the `salt` filter and a plugin
+	 * replacing the pluggable wp_salt() can return anything, and a key
+	 * derived from a short or public salt is no key.
 	 *
 	 * @since 1.0.0
 	 *
-	 * @return string
+	 * @param string $data What to hash.
+	 *
+	 * @return string 64 hex characters.
 	 *
 	 * @throws \RuntimeException When the site has no usable salt.
 	 */
-	private static function salt(): string {
+	private static function hash( string $data ): string {
 		$salt = wp_salt( 'auth' );
 
 		// A site left on the placeholder salts, or one where wp-config was
@@ -92,7 +104,7 @@ final class Keys {
 			);
 		}
 
-		return $salt;
+		return wp_hash( $data, 'auth', 'sha256' );
 	}
 
 	/**
@@ -110,7 +122,7 @@ final class Keys {
 	 * @throws \RuntimeException When the site has no usable salt.
 	 */
 	public static function derive( string $context ): string {
-		return hash_hmac( 'sha256', 'sugarcommerce/security/' . $context, self::salt() );
+		return self::hash( 'sugarcommerce/security/' . $context );
 	}
 
 	/**

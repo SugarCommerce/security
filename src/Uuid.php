@@ -41,17 +41,13 @@ final readonly class Uuid {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @return string 36 characters, hyphenated.
+	 * Core's: `wp_generate_uuid4()` draws from `wp_rand()`, which is
+	 * `random_int()`, and sets the same version and variant bits.
 	 *
-	 * @throws \Random\RandomException When the CSPRNG is unavailable.
+	 * @return string 36 characters, hyphenated, lower case.
 	 */
 	public static function v4(): string {
-		$bytes = random_bytes( 16 );
-
-		$bytes[6] = chr( ( ord( $bytes[6] ) & 0x0F ) | 0x40 );   // version 4
-		$bytes[8] = chr( ( ord( $bytes[8] ) & 0x3F ) | 0x80 );   // RFC 4122 variant
-
-		return self::format( $bytes );
+		return wp_generate_uuid4();
 	}
 
 	/**
@@ -85,6 +81,11 @@ final readonly class Uuid {
 
 	/**
 	 * Whether a string is a well-formed UUID.
+	 *
+	 * Not core's `wp_is_uuid()`, which would loosen it: core checks a
+	 * version only for 4, accepts any digit in the version and variant
+	 * places when none is asked for, refuses upper case, and lets a
+	 * trailing newline through (`$` without `D`).
 	 *
 	 * @since 1.0.0
 	 *

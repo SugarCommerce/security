@@ -47,11 +47,12 @@ use SensitiveParameter;
 final class Limiter {
 
 	/**
-	 * The secret counter names are hashed with.
+	 * The secret counter names are hashed with; null for the site's
+	 * `nonce` salt, through core's wp_hash().
 	 *
-	 * @var string
+	 * @var string|null
 	 */
-	private string $secret;
+	private ?string $secret;
 
 	/**
 	 * A limiter.
@@ -69,7 +70,7 @@ final class Limiter {
 		#[SensitiveParameter] ?string $secret = null,
 		private readonly ?int $now = null
 	) {
-		$this->secret = $secret ?? wp_salt( 'nonce' );
+		$this->secret = $secret;
 	}
 
 	/**
@@ -228,7 +229,15 @@ final class Limiter {
 	 * @since 1.0.0
 	 */
 	public function key( string $name, int $window, int $now ): string {
-		return hash_hmac( 'sha256', $name . '|' . $window . '|' . intdiv( $now, $window ), $this->secret );
+		$data = $name . '|' . $window . '|' . intdiv( $now, $window );
+
+		// Core's wp_hash( …, 'nonce', 'sha256' ) is hash_hmac( 'sha256', …,
+		// wp_salt( 'nonce' ) ), the default secret this always had, so every
+		// counter keeps its key. A secret of the caller's own has no scheme
+		// to name, so it is hashed here.
+		return null === $this->secret
+			? wp_hash( $data, 'nonce', 'sha256' )
+			: hash_hmac( 'sha256', $data, $this->secret );
 	}
 
 	/**

@@ -251,8 +251,32 @@ function wp_salt( $scheme = 'auth' ) {
 	return str_repeat( 'a', 64 ) . '-' . $scheme;
 }
 
+/**
+ * Core's keyed hash, as pluggable.php has it: HMAC under wp_salt( $scheme ).
+ */
+function wp_hash( $data, $scheme = 'auth', $algo = 'md5' ) {
+	if ( ! in_array( $algo, hash_hmac_algos(), true ) ) {
+		throw new InvalidArgumentException( 'Unsupported hashing algorithm: ' . $algo );
+	}
+
+	return hash_hmac( $algo, $data, wp_salt( $scheme ) );
+}
+
+/**
+ * Core's version 4 UUID, as functions.php has it (wp_rand() is random_int()).
+ */
 function wp_generate_uuid4() {
-	return '6f9619ff-8b86-4d01-b42d-00cf4fc964ff';
+	return sprintf(
+		'%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+		random_int( 0, 0xffff ),
+		random_int( 0, 0xffff ),
+		random_int( 0, 0xffff ),
+		random_int( 0, 0x0fff ) | 0x4000,
+		random_int( 0, 0x3fff ) | 0x8000,
+		random_int( 0, 0xffff ),
+		random_int( 0, 0xffff ),
+		random_int( 0, 0xffff )
+	);
 }
 
 function wp_remote_post( $url, $args = array() ) {
@@ -408,4 +432,128 @@ function remove_accents( string $text ): string {
 			'Ñ' => 'N', 'Ç' => 'C', 'Æ' => 'AE',
 		)
 	);
+}
+
+function wp_normalize_path( $path ) {
+	return str_replace( '\\', '/', (string) $path );
+}
+
+function wp_parse_args( $args, $defaults = array() ) {
+	return array_merge( $defaults, is_array( $args ) ? $args : array() );
+}
+
+function _doing_it_wrong( $function_name, $message, $version ) {
+	$GLOBALS['ts_doing_it_wrong'][] = $function_name;
+}
+
+/*
+ * Core's admin notice functions, verbatim from WordPress 7.1 (wp-includes/functions.php),
+ * so a notice is tested against the markup core really prints.
+ */
+if ( ! function_exists( 'wp_get_admin_notice' ) ) {
+function wp_get_admin_notice( $message, $args = array() ) {
+	$defaults = array(
+		'type'               => '',
+		'dismissible'        => false,
+		'id'                 => '',
+		'additional_classes' => array(),
+		'attributes'         => array(),
+		'paragraph_wrap'     => true,
+	);
+
+	$args = wp_parse_args( $args, $defaults );
+
+	/**
+	 * Filters the arguments for an admin notice.
+	 *
+	 * @since 6.4.0
+	 *
+	 * @param array  $args    The arguments for the admin notice.
+	 * @param string $message The message for the admin notice.
+	 */
+	$args       = apply_filters( 'wp_admin_notice_args', $args, $message );
+	$id         = '';
+	$classes    = 'notice';
+	$attributes = '';
+
+	if ( is_string( $args['id'] ) ) {
+		$trimmed_id = trim( $args['id'] );
+
+		if ( '' !== $trimmed_id ) {
+			$id = 'id="' . $trimmed_id . '" ';
+		}
+	}
+
+	if ( is_string( $args['type'] ) ) {
+		$type = trim( $args['type'] );
+
+		if ( str_contains( $type, ' ' ) ) {
+			_doing_it_wrong(
+				__FUNCTION__,
+				sprintf(
+					/* translators: %s: The "type" key. */
+					__( 'The %s key must be a string without spaces.' ),
+					'<code>type</code>'
+				),
+				'6.4.0'
+			);
+		}
+
+		if ( '' !== $type ) {
+			$classes .= ' notice-' . $type;
+		}
+	}
+
+	if ( true === $args['dismissible'] ) {
+		$classes .= ' is-dismissible';
+	}
+
+	if ( is_array( $args['additional_classes'] ) && ! empty( $args['additional_classes'] ) ) {
+		$classes .= ' ' . implode( ' ', $args['additional_classes'] );
+	}
+
+	if ( is_array( $args['attributes'] ) && ! empty( $args['attributes'] ) ) {
+		$attributes = '';
+		foreach ( $args['attributes'] as $attr => $val ) {
+			if ( is_bool( $val ) ) {
+				$attributes .= $val ? ' ' . $attr : '';
+			} elseif ( is_int( $attr ) ) {
+				$attributes .= ' ' . esc_attr( trim( $val ) );
+			} elseif ( $val ) {
+				$attributes .= ' ' . $attr . '="' . esc_attr( trim( $val ) ) . '"';
+			}
+		}
+	}
+
+	if ( false !== $args['paragraph_wrap'] ) {
+		$message = "<p>$message</p>";
+	}
+
+	$markup = sprintf( '<div %1$sclass="%2$s"%3$s>%4$s</div>', $id, $classes, $attributes, $message );
+
+	/**
+	 * Filters the markup for an admin notice.
+	 *
+	 * @since 6.4.0
+	 *
+	 * @param string $markup  The HTML markup for the admin notice.
+	 * @param string $message The message for the admin notice.
+	 * @param array  $args    The arguments for the admin notice.
+	 */
+	return apply_filters( 'wp_admin_notice_markup', $markup, $message, $args );
+}
+
+function wp_admin_notice( $message, $args = array() ) {
+	/**
+	 * Fires before an admin notice is output.
+	 *
+	 * @since 6.4.0
+	 *
+	 * @param string $message The message for the admin notice.
+	 * @param array  $args    The arguments for the admin notice.
+	 */
+	do_action( 'wp_admin_notice', $message, $args );
+
+	echo wp_kses_post( wp_get_admin_notice( $message, $args ) );
+}
 }

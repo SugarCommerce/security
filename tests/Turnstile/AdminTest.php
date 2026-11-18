@@ -85,6 +85,19 @@ final class AdminTest extends TestCase {
 		$this->assertStringContainsString( 'let through', $this->notice( $this->turnstile( array( 'fail_open' => true ) ) ) );
 	}
 
+	public function test_the_notice_is_cores_with_its_filters(): void {
+		$turnstile = $this->turnstile();
+		$this->refuse_the_secret( $turnstile );
+
+		add_filter( 'wp_admin_notice_markup', static fn( string $markup ): string => $markup . '<!-- filtered -->' );
+
+		$notice = $this->notice( $turnstile );
+
+		$this->assertSame( 'wp_admin_notice', $GLOBALS['ts_fired'][ array_key_last( $GLOBALS['ts_fired'] ) ][0] );
+		$this->assertStringEndsWith( '</div><!-- filtered -->', $notice );
+		$this->assertStringStartsWith( '<div class="notice notice-warning demo-turnstile-notice"><p><strong>', $notice, 'Two paragraphs, not one inside another.' );
+	}
+
 	public function test_the_notice_is_for_whoever_can_change_it_where_the_plugin_says(): void {
 		$this->refuse_the_secret( $this->turnstile() );
 
