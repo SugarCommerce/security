@@ -385,15 +385,15 @@ class Secrets {
 	 */
 	public function get_setting_description( string $option, string $base_desc ): string {
 		if ( $this->is_constant_defined( $option ) ) {
-			return $base_desc . sprintf( ' <strong>%s</strong> <code>%s</code>', __( 'Defined as constant:', 'arraypress' ), $this->constant_name( $option ) );
+			return $base_desc . sprintf( ' <strong>%s</strong> <code>%s</code>', __( 'Defined as constant:', 'sugarcommerce' ), $this->constant_name( $option ) );
 		}
 
 		// Said, or the field looks editable while saves do nothing.
 		if ( $this->is_env_defined( $option ) ) {
-			return $base_desc . sprintf( ' <strong>%s</strong> <code>%s</code>', __( 'Defined as environment variable:', 'arraypress' ), $this->constant_name( $option ) );
+			return $base_desc . sprintf( ' <strong>%s</strong> <code>%s</code>', __( 'Defined as environment variable:', 'sugarcommerce' ), $this->constant_name( $option ) );
 		}
 
-		return $base_desc . ' ' . __( '(stored encrypted in database)', 'arraypress' );
+		return $base_desc . ' ' . __( '(stored encrypted in database)', 'sugarcommerce' );
 	}
 
 	/* ─── Transients and meta ─────────────────────────────────────── */
