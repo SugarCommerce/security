@@ -1,0 +1,85 @@
+{
+  "name": "sugarcommerce/security",
+  "description": "Security for a WordPress plugin: signed links that expire, secrets kept encrypted, licence keys and API keys, rate limits that hold under a burst, Cloudflare Turnstile on forms, and two-factor codes.",
+  "homepage": "https://github.com/sugarcommerce/security",
+  "type": "library",
+  "license": "GPL-2.0-or-later",
+  "authors": [
+    {
+      "name": "David Sherlock",
+      "homepage": "https://arraypress.com/"
+    }
+  ],
+  "keywords": [
+    "wordpress",
+    "security",
+    "signed-url",
+    "magic-link",
+    "encryption",
+    "licence-key",
+    "api-key",
+    "uuid",
+    "rate-limit",
+    "turnstile",
+    "captcha",
+    "totp",
+    "2fa"
+  ],
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../dates",
+      "options": {
+        "symlink": false
+      }
+    }
+  ],
+  "require": {
+    "php": ">=8.3",
+    "ext-openssl": "*",
+    "sugarcommerce/dates": "dev-main"
+  },
+  "require-dev": {
+    "phpcompatibility/phpcompatibility-wp": "^2.1",
+    "phpunit/phpunit": "^12.0",
+    "squizlabs/php_codesniffer": "^3.13.5",
+    "wp-coding-standards/wpcs": "^3.4"
+  },
+  "suggest": {
+    "ext-apcu": "For the APCu rate-limit store.",
+    "ext-intl": "For slugs from titles in any script, not only accented Latin."
+  },
+  "autoload": {
+    "psr-4": {
+      "SugarCommerce\\Security\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "SugarCommerce\\Security\\Tests\\": "tests/"
+    },
+    "exclude-from-classmap": [
+      "/tests/bootstrap.php"
+    ]
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "sort-packages": true,
+    "preferred-install": "dist",
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "scripts": {
+    "test": "phpunit",
+    "lint": "phpcs",
+    "format": "phpcbf --standard=phpcs-format.xml.dist",
+    "format:check": "phpcs --standard=phpcs-format.xml.dist"
+  },
+  "support": {
+    "issues": "https://github.com/sugarcommerce/security/issues",
+    "source": "https://github.com/sugarcommerce/security"
+  }
+}

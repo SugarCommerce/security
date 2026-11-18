@@ -1,0 +1,168 @@
+<?php
+/**
+ * Keyed hashing for values that must be comparable but not recoverable.
+ *
+ * @package   SugarCommerce\Security
+ * @copyright Copyright (c) 2026, ArrayPress Limited
+ * @license   GPL-2.0-or-later
+ * @since     1.0.0
+ */
+
+declare( strict_types=1 );
+
+namespace SugarCommerce\Security;
+
+/**
+ * Class Hash
+ *
+ * For the values an application has to store in order to count, compare or
+ * rate-limit, but has no business being able to read back: addresses, user
+ * agents, an email used only as a key.
+ *
+ * Deliberately keyed, and that is the whole point of the class. IPv4 is only
+ * four billion values, so an unkeyed SHA-256 of an address can be reversed by
+ * brute force in seconds — the digest is still personal data, and storing it
+ * satisfies nobody's data protection officer. Keyed, a digest only ever
+ * compares equal to itself, which is all that counting distinct visitors
+ * needs, and it is worthless to anyone who takes the table without the secret.
+ *
+ * Not for API keys or passwords. An API key is looked up by its digest, so it
+ * cannot be keyed with a secret the finder might not have — use
+ * {@see ApiKey::digest()}. A password needs a slow hash —
+ * use `password_hash()`.
+ *
+ * @since 1.0.0
+ */
+final readonly class Hash {
+
+	/**
+	 * @since 1.0.0
+	 *
+	 * @param string $secret Signing key. Losing it does not lose data, but it
+	 *                       does break comparison against everything already
+	 *                       stored, so rotating it is a migration and not a
+	 *                       configuration change.
+	 *
+	 * @throws \InvalidArgumentException When the secret is empty: an HMAC
+	 *                                   under '' is a hash anybody can
+	 *                                   compute, and an IPv4 digest under it
+	 *                                   is reversed in seconds.
+	 */
+	public function __construct(
+		#[\SensitiveParameter]
+		private string $secret,
+	) {
+		if ( '' === $secret ) {
+			throw new \InvalidArgumentException( 'A hashing secret cannot be empty: the digests would be reversible by anybody.' );
+		}
+	}
+
+	/**
+	 * Keep the secret out of `var_dump()` and `print_r()`.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return array{secret: string}
+	 */
+	public function __debugInfo(): array {
+		return array( 'secret' => '[redacted]' );
+	}
+
+	/**
+	 * A hasher keyed for one purpose, from a secret shared by several.
+	 *
+	 * An application usually has one configured secret. Keying every index
+	 * with it directly means two indexes compare equal across purposes —
+	 * an email's lookup hash would match its rate-limit key — and that
+	 * rotating one rotates all of them without anybody deciding to. HKDF
+	 * gives each purpose its own key, and none of them reveals the secret
+	 * or each other.
+	 *
+	 * Stable: the same secret and context always give the same key, so
+	 * digests stored yesterday still match today.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $secret  The shared secret.
+	 * @param string $context What the digests are for, e.g. `app/email-index`.
+	 *                        Different contexts never produce equal digests.
+	 *
+	 * @return self
+	 *
+	 * @throws \ValueError When the secret is empty.
+	 */
+	public static function derived( #[\SensitiveParameter] string $secret, string $context ): self {
+		return new self( hash_hkdf( 'sha256', $secret, 32, $context ) );
+	}
+
+	/**
+	 * A hasher keyed to this site, for one purpose.
+	 *
+	 * No secret to configure: the key is derived from the site's salts
+	 * ({@see Keys::derive()}), so rotating the salts starts every count
+	 * again, once.
+	 *
+	 *     $visitors = Hash::site( 'visitors' );
+	 *     $stored   = $visitors->ip( $address );
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $purpose What the digests are for. Two purposes never
+	 *                        produce equal digests.
+	 *
+	 * @return self
+	 *
+	 * @throws \RuntimeException When the site has no usable salt.
+	 */
+	public static function site( string $purpose = 'default' ): self {
+		return new self( Keys::derive( 'hash/' . $purpose ) );
+	}
+
+	/**
+	 * Pseudonymise an IP address.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $ip The address. '' passes through unchanged, so a
+	 *                   caller with no address stores no digest rather than
+	 *                   a digest of nothing that compares equal across every
+	 *                   such row.
+	 *
+	 * @return string
+	 */
+	public function ip( string $ip ): string {
+		return '' === $ip ? '' : hash_hmac( 'sha256', $ip, $this->secret );
+	}
+
+	/**
+	 * Pseudonymise any short string, under the same reasoning.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $value A user agent, an email used as a rate-limit key.
+	 *
+	 * @return string
+	 */
+	public function opaque( string $value ): string {
+		return '' === $value ? '' : hash_hmac( 'sha256', $value, $this->secret );
+	}
+
+	/**
+	 * Whether a value matches a stored digest.
+	 *
+	 * Constant-time. Comparing with `===` short-circuits on the first
+	 * differing byte, which over enough requests says how much of a guess was
+	 * right.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $value  The plain value.
+	 * @param string $digest A digest from ip() or opaque().
+	 *
+	 * @return bool
+	 */
+	#[\NoDiscard( 'An unchecked comparison checks nothing.' )]
+	public function matches( string $value, string $digest ): bool {
+		return '' !== $digest && hash_equals( $digest, $this->opaque( $value ) );
+	}
+}
