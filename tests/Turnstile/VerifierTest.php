@@ -123,7 +123,17 @@ final class VerifierTest extends TestCase {
 
 		$this->assertSame( Reason::WrongHostname, $verifier->verify( 'tok' )->reason );
 		$this->assertTrue( $verifier->verify( 'tok' )->success, 'Compared without case.' );
-		$this->assertTrue( $verifier->verify( 'tok' )->success, 'An answer without a hostname has nothing to compare.' );
+		$this->assertSame( Reason::WrongHostname, $verifier->verify( 'tok' )->reason, 'An answer without a hostname cannot be shown to be for this site.' );
+	}
+
+	public function test_a_missing_hostname_is_refused_only_when_one_is_expected(): void {
+		$GLOBALS['ts_responses'] = array(
+			ts_answer( array( 'success' => true, 'hostname' => '' ) ),
+			ts_answer( array( 'success' => true, 'hostname' => '' ) ),
+		);
+
+		$this->assertSame( Reason::WrongHostname, ( new Verifier( self::SECRET, array( 'example.com' ) ) )->verify( 'tok' )->reason );
+		$this->assertTrue( ( new Verifier( self::SECRET ) )->verify( 'tok' )->success, 'With no expectation, any hostname will do.' );
 	}
 
 	public function test_no_hostnames_accepts_any(): void {
@@ -146,7 +156,17 @@ final class VerifierTest extends TestCase {
 		$this->assertSame( Reason::WrongAction, $answer->reason );
 		$this->assertSame( array( 'wrong_action' ), $answer->summary() );
 		$this->assertTrue( $verifier->verify( 'tok' )->success );
-		$this->assertTrue( $verifier->verify( 'tok' )->success, 'An answer without an action has nothing to compare.' );
+		$this->assertSame( Reason::WrongAction, $verifier->verify( 'tok' )->reason, 'A widget without an action is not this form.' );
+	}
+
+	public function test_a_widget_without_an_action_is_refused_only_when_one_is_expected(): void {
+		$GLOBALS['ts_responses'] = array(
+			ts_answer( array( 'success' => true, 'action' => '' ) ),
+			ts_answer( array( 'success' => true, 'action' => '' ) ),
+		);
+
+		$this->assertSame( Reason::WrongAction, ( new Verifier( self::SECRET, array(), 'checkout' ) )->verify( 'tok' )->reason );
+		$this->assertTrue( ( new Verifier( self::SECRET ) )->verify( 'tok' )->success, 'With no expectation, any action will do.' );
 	}
 
 	public function test_cloudflares_test_secrets_skip_the_hostname_and_action_checks(): void {

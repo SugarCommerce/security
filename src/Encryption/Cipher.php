@@ -13,6 +13,7 @@ declare( strict_types=1 );
 namespace SugarCommerce\Security\Encryption;
 
 use Exception;
+use InvalidArgumentException;
 use RuntimeException;
 use SugarCommerce\Security\Keys;
 use WP_Error;
@@ -32,10 +33,22 @@ use WP_Error;
  * read, so nothing stored is lost, and are written back authenticated the
  * next time they are saved.
  *
- * A stored value is marked: `__PREFIX_ENCRYPTED__v2:` and base64 of
+ * A stored value is marked: `__PREFIX_ENCRYPTED__v3:` and base64 of
  * nonce, tag and ciphertext. The mark is how decrypt() tells a sealed value
  * from a plain one, so a column can be encrypted gradually: plain values
  * pass through decrypt() untouched.
+ *
+ * **Each purpose has its own key.** The key a value is written under is
+ * derived from the site's (or the caller's) with HKDF-SHA256 and a purpose
+ * label -- the prefix, unless one is named -- so a value one plugin
+ * encrypted does not open under another plugin's cipher, even though both
+ * start from the same salts. `v2:` values, written under the shared key
+ * before that, are still read and move to their purpose's key the next
+ * time they are saved ({@see self::is_legacy_format()}).
+ *
+ * **A key of the caller's own is at least 32 bytes.** A short one is
+ * refused rather than stretched: `sha256( 'k' )` is 32 bytes anyone can
+ * guess. To read values written under a short key, pass it to also_open().
  *
  *     $cipher = new Cipher( 'myplugin' );
  *     $stored = $cipher->encrypt( $key );
@@ -44,7 +57,9 @@ use WP_Error;
  * Code with a marker of its own -- one already in its stored values, say --
  * keeps the marker and has this class do the encryption: seal() and open()
  * are the same AES-256-GCM payload without any marker, and also_open() lets
- * values made under a key derived some other way still be read.
+ * values made under a key derived some other way still be read. A payload
+ * carries no version, so seal() stays on the shared key unless a purpose is
+ * named in the constructor; name one for new code.
  *
  *     $payload = $cipher->seal( $json );          // base64 of nonce, tag, ciphertext
  *     $json    = $cipher->open( $payload );       // or a WP_Error
@@ -76,7 +91,31 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 */
-	private const FORMAT = 'v2:';
+	private const FORMAT = 'v3:';
+
+	/**
+	 * Marker of the authenticated format written under the shared key,
+	 * before each purpose had its own. Read, never written.
+	 *
+	 * @since 1.0.0
+	 */
+	private const SHARED_FORMAT = 'v2:';
+
+	/**
+	 * The shortest key of the caller's own, in bytes.
+	 *
+	 * @since 1.0.0
+	 */
+	public const MIN_KEY_BYTES = 32;
+
+	/**
+	 * HKDF info a purpose key is derived with, before the purpose label.
+	 *
+	 * Fixed: changing it would stop every `v3:` value from decrypting.
+	 *
+	 * @since 1.0.0
+	 */
+	private const PURPOSE_CONTEXT = 'sugarcommerce/security/cipher/v3/';
 
 	/**
 	 * GCM nonce length in bytes. 96 bits is the length GCM is specified
@@ -124,25 +163,88 @@ final class Cipher {
 	private string $marker;
 
 	/**
+	 * The label this cipher's keys are derived with.
+	 *
+	 * @var string
+	 */
+	private string $purpose;
+
+	/**
+	 * Whether the caller named the purpose, which puts seal() on it too.
+	 *
+	 * @var bool
+	 */
+	private bool $named;
+
+	/**
 	 * @since 1.0.0
 	 *
 	 * @param string      $prefix What marks this plugin's values, such as
 	 *                            `myplugin`: they are stored as
 	 *                            `__MYPLUGIN_ENCRYPTED__…`.
-	 * @param string|null $key    A key of the caller's own. Null derives one
-	 *                            from the site ({@see Keys::encryption()}).
+	 * @param string|null $key     A key of the caller's own, at least
+	 *                             {@see self::MIN_KEY_BYTES} bytes. Null
+	 *                             derives one from the site
+	 *                             ({@see Keys::encryption()}).
+	 * @param string|null $purpose What the values are, such as
+	 *                             `myplugin/api-keys`: each purpose gets
+	 *                             its own key. Null uses the prefix for
+	 *                             encrypt() and leaves seal() on the
+	 *                             shared key, as payloads sealed before
+	 *                             purposes existed are under it.
 	 *
-	 * @throws RuntimeException When OpenSSL or AES-256-GCM is missing, or
-	 *                          the site has no key material.
+	 * @throws RuntimeException         When OpenSSL or AES-256-GCM is
+	 *                                  missing, or the site has no key
+	 *                                  material.
+	 * @throws InvalidArgumentException When the key is too short or the
+	 *                                  purpose is empty.
 	 */
-	public function __construct( string $prefix, #[\SensitiveParameter] ?string $key = null ) {
+	public function __construct( string $prefix, #[\SensitiveParameter] ?string $key = null, ?string $purpose = null ) {
 		if ( ! extension_loaded( 'openssl' ) || ! in_array( self::ALGORITHM, openssl_get_cipher_methods(), true ) ) {
 			throw new RuntimeException( 'Encryption needs the OpenSSL extension with ' . self::ALGORITHM . '.' );
 		}
 
-		$this->marker = '__' . strtoupper( $prefix ) . '_ENCRYPTED__';
-		$this->key      = Keys::encryption( $key );
+		if ( null !== $purpose && '' === trim( $purpose ) ) {
+			throw new InvalidArgumentException( 'A purpose cannot be empty: pass null to use the prefix.' );
+		}
+
+		$this->marker   = '__' . strtoupper( $prefix ) . '_ENCRYPTED__';
+		$this->purpose  = $purpose ?? strtolower( $prefix );
+		$this->named    = null !== $purpose;
+		$this->key      = Keys::encryption( self::checked( $key ) );
 		$this->previous = Keys::previous_encryption( $key );
+	}
+
+	/**
+	 * Refuse a key of the caller's own that is too short to be one.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string|null $key A key of the caller's own, or null/'' for the site's.
+	 *
+	 * @return string|null The key, unchanged.
+	 *
+	 * @throws InvalidArgumentException When it is shorter than {@see self::MIN_KEY_BYTES}.
+	 */
+	private static function checked( #[\SensitiveParameter] ?string $key ): ?string {
+		if ( null !== $key && '' !== $key && strlen( $key ) < self::MIN_KEY_BYTES ) {
+			throw new InvalidArgumentException( sprintf( 'An encryption key must be at least %d bytes: try base64_encode( random_bytes( 32 ) ).', self::MIN_KEY_BYTES ) );
+		}
+
+		return $key;
+	}
+
+	/**
+	 * The key for this cipher's purpose, from a 32-byte key.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $key 32 raw bytes.
+	 *
+	 * @return string 32 raw bytes.
+	 */
+	private function derive( #[\SensitiveParameter] string $key ): string {
+		return hash_hkdf( 'sha256', $key, 32, self::PURPOSE_CONTEXT . $this->purpose );
 	}
 
 	/**
@@ -150,12 +252,13 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @return array{marker: string, key: string}
+	 * @return array{marker: string, purpose: string, key: string}
 	 */
 	public function __debugInfo(): array {
 		return array(
-			'marker' => $this->marker,
-			'key'    => '[redacted]',
+			'marker'  => $this->marker,
+			'purpose' => $this->purpose,
+			'key'     => '[redacted]',
 		);
 	}
 
@@ -202,12 +305,16 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string|null $key A key of the caller's own, or null for the site's.
+	 * @param string|null $key A key of the caller's own, at least
+	 *                         {@see self::MIN_KEY_BYTES} bytes, or null for
+	 *                         the site's.
 	 *
 	 * @return void
+	 *
+	 * @throws InvalidArgumentException When the key is too short.
 	 */
 	public function change_key( #[\SensitiveParameter] ?string $key = null ): void {
-		$this->key      = Keys::encryption( $key );
+		$this->key      = Keys::encryption( self::checked( $key ) );
 		$this->previous = Keys::previous_encryption( $key );
 	}
 
@@ -226,7 +333,7 @@ final class Cipher {
 			return $value;
 		}
 
-		$sealed = $this->seal( $value );
+		$sealed = $this->seal_under( $value, $this->derive( $this->key ) );
 
 		return is_string( $sealed ) ? $this->marker . self::FORMAT . $sealed : $sealed;
 	}
@@ -235,8 +342,10 @@ final class Cipher {
 	 * Encrypt a value, without the marker.
 	 *
 	 * For code that marks its stored values its own way. The payload is
-	 * what encrypt() puts after its marker: base64 of a 12-byte nonce, the
-	 * 16-byte tag and the ciphertext, under AES-256-GCM.
+	 * the shape encrypt() puts after its marker: base64 of a 12-byte nonce,
+	 * the 16-byte tag and the ciphertext, under AES-256-GCM. It is under the
+	 * purpose's key when the constructor named a purpose, and under the
+	 * shared key when it did not.
 	 *
 	 * @since 1.0.0
 	 *
@@ -246,6 +355,20 @@ final class Cipher {
 	 * @return string|WP_Error Base64, or why not.
 	 */
 	public function seal( #[\SensitiveParameter] string $value ): string|WP_Error {
+		return $this->seal_under( $value, $this->named ? $this->derive( $this->key ) : $this->key );
+	}
+
+	/**
+	 * Seal a value under one key.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $value The plain value.
+	 * @param string $key   32 raw bytes.
+	 *
+	 * @return string|WP_Error Base64, or why not.
+	 */
+	private function seal_under( #[\SensitiveParameter] string $value, #[\SensitiveParameter] string $key ): string|WP_Error {
 		try {
 			$iv = random_bytes( self::IV_LENGTH );
 		} catch ( Exception $e ) {
@@ -253,7 +376,7 @@ final class Cipher {
 		}
 
 		$tag       = '';
-		$encrypted = openssl_encrypt( $value, self::ALGORITHM, $this->key, OPENSSL_RAW_DATA, $iv, $tag, '', self::TAG_LENGTH );
+		$encrypted = openssl_encrypt( $value, self::ALGORITHM, $key, OPENSSL_RAW_DATA, $iv, $tag, '', self::TAG_LENGTH );
 
 		if ( false === $encrypted ) {
 			return new WP_Error( 'encryption_error', 'Encryption failed: ' . openssl_error_string() );
@@ -266,7 +389,8 @@ final class Cipher {
 	 * Decrypt a payload made by seal().
 	 *
 	 * Tried under this cipher's key, then the site's previous one, then any
-	 * given to also_open().
+	 * given to also_open() -- the purpose's keys first when a purpose was
+	 * named, then the shared ones a payload sealed before that is under.
 	 *
 	 * @since 1.0.0
 	 *
@@ -276,9 +400,23 @@ final class Cipher {
 	 *                         derived from a payload that failed its check.
 	 */
 	public function open( string $payload ): string|WP_Error {
+		return $this->open_under( $payload, $this->named ? array( ...$this->purpose_keys(), ...$this->keys() ) : $this->keys() );
+	}
+
+	/**
+	 * Decrypt a payload under the first of several keys that opens it.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string   $payload Base64 of nonce, tag and ciphertext.
+	 * @param string[] $keys    32 raw bytes each.
+	 *
+	 * @return string|WP_Error The plain value, or the first failure.
+	 */
+	private function open_under( string $payload, #[\SensitiveParameter] array $keys ): string|WP_Error {
 		$result = null;
 
-		foreach ( $this->keys() as $key ) {
+		foreach ( $keys as $key ) {
 			$plain = $this->decrypt_authenticated( $payload, $key );
 
 			if ( is_string( $plain ) ) {
@@ -312,9 +450,10 @@ final class Cipher {
 	/**
 	 * Decrypt a value.
 	 *
-	 * Reads both the authenticated format and the legacy one. A value
-	 * without the marker is returned as it is, so plain values stored
-	 * before encryption was switched on keep working. A value the key does
+	 * Reads the purpose's format (`v3:`), the shared-key one before it
+	 * (`v2:`) and the unauthenticated legacy one. A value without the
+	 * marker is returned as it is, so plain values stored before encryption
+	 * was switched on keep working. A value the key does
 	 * not open is tried under the key a site on the placeholder salts used
 	 * before ({@see Keys::previous_encryption()}), so it can be read and
 	 * saved again under the new one.
@@ -334,7 +473,11 @@ final class Cipher {
 		$payload = substr( $value, strlen( $this->marker ) );
 
 		if ( str_starts_with( $payload, self::FORMAT ) ) {
-			return $this->open( substr( $payload, strlen( self::FORMAT ) ) );
+			return $this->open_under( substr( $payload, strlen( self::FORMAT ) ), $this->purpose_keys() );
+		}
+
+		if ( str_starts_with( $payload, self::SHARED_FORMAT ) ) {
+			return $this->open_under( substr( $payload, strlen( self::SHARED_FORMAT ) ), $this->keys() );
 		}
 
 		$result = null;
@@ -361,6 +504,17 @@ final class Cipher {
 	 */
 	private function keys(): array {
 		return array( $this->key, ...$this->previous, ...$this->older );
+	}
+
+	/**
+	 * Every key a value may be under, derived for this cipher's purpose.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return string[] 32 raw bytes each.
+	 */
+	private function purpose_keys(): array {
+		return array_map( $this->derive( ... ), $this->keys() );
 	}
 
 	/**
@@ -415,10 +569,11 @@ final class Cipher {
 	}
 
 	/**
-	 * Whether a stored value is still in the unauthenticated format.
+	 * Whether a stored value is in an older format.
 	 *
-	 * For a one-off migration: read each value, and when this is true write
-	 * it straight back to re-encrypt it under AES-256-GCM.
+	 * The unauthenticated CBC one, or `v2:` under the key every purpose
+	 * shared. For a one-off migration: read each value, and when this is
+	 * true write it straight back to re-encrypt it under this purpose's key.
 	 *
 	 * @since 1.0.0
 	 *

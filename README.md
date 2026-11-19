@@ -81,19 +81,39 @@ decrypt instead of decrypting to something else.
 `$new->reencrypt( $stored, $old )` moves a value to a new key and is safe to
 run twice.
 
+Each purpose has its own key: the one a value is written under is derived from
+the site's (or yours) with HKDF-SHA256 and a purpose label — the prefix, or the
+third argument — so a value one plugin encrypted does not open under another
+plugin's `Cipher`, though both start from the same salts:
+
+```php
+$keys  = new Cipher( 'myplugin', null, 'myplugin/api-keys' );
+$hooks = new Cipher( 'myplugin', null, 'myplugin/webhooks' ); // cannot read $keys' values
+```
+
+Values are written as `__PREFIX_ENCRYPTED__v3:`. The `v2:` values written
+before, under the key every purpose shared, still decrypt; `is_legacy_format()`
+says so and saving them again moves them. A key of your own must be at least 32
+bytes (`Cipher::MIN_KEY_BYTES`) — a shorter one throws rather than being
+stretched into a guessable key; pass an old short key to `also_open()` to read
+what it wrote.
+
 This is the family's one copy of encryption: other packages call it rather than
 carry their own (`sugarcommerce/fields` encrypts its `encrypted` fields here).
 Code whose stored values already carry a marker of its own keeps the marker and
 uses the unmarked payload, the same AES-256-GCM nonce, tag and ciphertext that
-follows `__PREFIX_ENCRYPTED__v2:`:
+follows the marker:
 
 ```php
-$cipher = ( new Cipher( 'myplugin' ) )->also_open( $material_of_the_old_key );
+$cipher = ( new Cipher( 'myplugin', null, 'myplugin/columns' ) )->also_open( $material_of_the_old_key );
 
-$stored = 'mine:' . $cipher->seal( $value );           // written under the site key
+$stored = 'mine:' . $cipher->seal( $value );           // under the purpose's key
 $value  = $cipher->open( substr( $stored, 5 ) );        // or a WP_Error
 ```
 
+A payload carries no version, so without a named purpose `seal()` stays on the
+shared site key that payloads sealed before purposes are under; name one for new
+code. `open()` with a purpose tries the purpose's key, then the shared one.
 `also_open()` takes the key material an older copy hashed into its key, so its
 values still read; nothing is written under it.
 
@@ -152,9 +172,21 @@ One atomic step per attempt: the object cache's own increment where there is a
 persistent cache, `INSERT … ON DUPLICATE KEY UPDATE` on your table otherwise
 (`Table::schema()` writes it), or `Stores\Apcu`. Windows are fixed, so a client
 is told exactly when to come back (`$decision->headers()`); an IPv6 caller
-counts as its /64; counters hold a salted hash, never an address. Nothing to
-count against is never limited, and a store that cannot count lets the attempt
-through — a limit must never become the outage.
+counts as its /64; counters hold a salted hash, never an address.
+
+Nothing to count against is the visitor's address, never no limit:
+`for( 'reset_mail', '' )` counts against the address the request came from
+(`ClientIp::resolve()` from `sugarcommerce/network`, no proxy trusted). A site
+behind a proxy says who the visitor is with `$limiter->client( fn() => … )`. An
+empty action, or no identity and no address (a command line), throws.
+
+A store that cannot count — the table not installed, the database refusing —
+refuses the attempt by default, as the retired package did by throwing.
+`$limit->hit( 5, 600, fail_open: true )` lets it through for one call, and
+`$limiter->fail_open()` for every call, where an outage of the counter must not
+be an outage of what it protects. Either way it is reported (`error_log()`, or
+your own `$limiter->on_failure( fn( $key, $allowed ) => … )`) and
+`$decision->failed` is true.
 
 `Rules` keeps every limit in one table, so a call site names the action:
 
@@ -164,6 +196,7 @@ use SugarCommerce\Security\RateLimit\Rules;
 $rules = new Rules( $limiter, [ 'sign_in' => [ 5, 600 ], 'reset_mail' => [ 3, 3600 ] ] );
 $rules->hit( 'sign_in', $ip );   // counts
 $rules->allows( 'reset_mail', $email ); // looks
+$rules->hit( 'sign_in', $ip, fail_open: true ); // let through if the store is down
 ```
 
 ## Turnstile
@@ -187,7 +220,9 @@ $passed = $turnstile->verify( $token, 'signup' );        // true, or a 400/403 W
 
 Nothing of Cloudflare's is loaded until the owner switches it on with both
 keys, and then only on a page with a protected form. A token is held to the
-site's hostnames, the form it was made for, and once per request. `fail_open`
+site's hostnames, the form it was made for, and once per request; an answer
+from Cloudflare that leaves out the hostname or the action is refused like a
+wrong one (a widget rendered without `data-action` is not your form). `fail_open`
 decides what a Cloudflare outage or a refused key does; either way the owner is
 told by an admin notice (core's `wp_admin_notice()`) and Site Health. `status()` gives a settings card its
 word and tone, `key_test()->run()` backs a Test Keys button, `clean_key()` is a
@@ -241,8 +276,9 @@ can see a link expire, a window roll over or a code change without waiting:
 
 From `arraypress/wp-signed-tokens`, `wp-encryption-utils`, `wp-generate-utils`,
 `wp-rate-limit` and `wp-turnstile`. Tokens already emailed, values already
-encrypted and counters already kept carry on working: the key derivations and
-stored formats are unchanged. Keys, site digests, rate-limit counter names and
+encrypted and counters already kept carry on working: the key derivations are
+unchanged, and every stored format is still read (new values are written as
+`v3:`, below). Keys, site digests, rate-limit counter names and
 Turnstile key fingerprints are now made by core's `wp_hash( $data, $scheme,
 'sha256' )`, which is byte for byte the HMAC they were made with before
 (`tests/CoreHashTest.php` holds values from the old code).
@@ -265,12 +301,19 @@ Turnstile key fingerprints are now made by core's `wp_hash( $data, $scheme,
 | `Token::matches( $key, $hash )` | `ApiKey::matches( $key, $hash )` |
 | `Uuid::is_valid( $uuid, $version )` | unchanged; a version outside 1–8 is false, and a trailing newline is refused |
 | `ArrayPress\RateLimit\*` | `SugarCommerce\Security\RateLimit\*` — `Limiter`, `Limit`, `Decision`, `Store`, `Stores\*` |
+| `$limiter->for( $action, '' )` / `Rules::hit( $action, '' )` unlimited | counted against the visitor's address (`Limiter::client()`); no address, or no action, throws |
+| `Limiter::hit( '' , … )` unlimited | throws `InvalidArgumentException` |
+| a store that cannot count lets the attempt through | refused and reported; `hit( …, fail_open: true )` or `$limiter->fail_open()` to let it through |
+| `Verifier` accepting an answer with no hostname or action | refused (`wrong_hostname` / `wrong_action`) when one is expected, as the SaaS verifier did |
+| `new Cipher( $prefix, $short_key )` | a key under 32 bytes throws; read its old values with `also_open( $short_key )` |
+| `Cipher` writing `v2:` under the shared key | `v3:` under a per-purpose key; `v2:` still read, `is_legacy_format()` true |
 | `ArrayPress\Turnstile\*` | `SugarCommerce\Security\Turnstile\*` — every class, option and hook name |
 | `arraypress/wp-composer-assets` (Turnstile's module URL) | `SugarCommerce\Plugin\Assets`, required (the family's one asset-URL resolver) |
 | `Uuid::v4()` | unchanged; now core's `wp_generate_uuid4()`. `is_valid()` stays its own, stricter than `wp_is_uuid()` |
 
 New: `Signer::derived()`, `Keys::derive()`, `Cipher::encrypt_once()`,
-`reencrypt()`, `seal()`, `open()` and `also_open()`, `Secrets::cipher()`, `Random::id()`, `ApiKey::digest()` and its
+`reencrypt()`, `seal()`, `open()`, `also_open()` and the `$purpose` argument,
+`Limiter::client()`, `fail_open()` and `on_failure()`, `Decision::$failed`, `Secrets::cipher()`, `Random::id()`, `ApiKey::digest()` and its
 `$shown`, `Slug::clean()`, `RateLimit\Rules`, `Stores\Apcu`, Turnstile's
 `ErrorCode`, `Verification::errors()` and `has()`, `Verifier::passes()`,
 `for_hostnames()`, `for_action()` and `is_test_secret( $secret, true )`, and

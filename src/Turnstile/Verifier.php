@@ -312,13 +312,15 @@ final class Verifier {
 			return $answer;
 		}
 
-		// Each only when Cloudflare said which: an answer without a
-		// hostname or an action has nothing to compare.
-		if ( array() !== $this->hostnames && '' !== $answer->hostname && ! in_array( strtolower( $answer->hostname ), $this->hostnames, true ) ) {
+		// Each only when one is expected, and then an answer that leaves it
+		// out is refused like a wrong one: a token from a widget rendered
+		// without `data-action`, or an answer with no hostname, cannot be
+		// shown to be for this site and this form.
+		if ( array() !== $this->hostnames && ! in_array( strtolower( $answer->hostname ), $this->hostnames, true ) ) {
 			return $answer->refused( Reason::WrongHostname );
 		}
 
-		if ( '' !== $this->action && '' !== $answer->action && $answer->action !== $this->action ) {
+		if ( '' !== $this->action && $answer->action !== $this->action ) {
 			return $answer->refused( Reason::WrongAction );
 		}
 

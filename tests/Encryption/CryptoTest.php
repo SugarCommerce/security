@@ -17,7 +17,7 @@ final class CryptoTest extends TestCase {
 
 	protected function setUp(): void {
 		ts_reset();
-		$this->manager = new Secrets( 'testpfx', 'unit-test-key', false );
+		$this->manager = new Secrets( 'testpfx', ts_key( 'unit-test-key' ), false );
 	}
 
 	/**
@@ -42,7 +42,7 @@ final class CryptoTest extends TestCase {
 	}
 
 	public function test_ciphertext_uses_the_authenticated_format(): void {
-		$this->assertStringContainsString( 'v2:', $this->manager->encrypt( 'x' ) );
+		$this->assertStringContainsString( 'v3:', $this->manager->encrypt( 'x' ) );
 	}
 
 	public function test_each_encryption_uses_a_fresh_iv(): void {
@@ -65,7 +65,7 @@ final class CryptoTest extends TestCase {
 	public function test_tampered_ciphertext_is_rejected(): void {
 		$encrypted = $this->manager->encrypt( 'super-secret-value' );
 
-		$marker  = strpos( $encrypted, 'v2:' ) + 3;
+		$marker  = strpos( $encrypted, 'v3:' ) + 3;
 		$payload = base64_decode( substr( $encrypted, $marker ) );
 
 		// Flip one bit of the ciphertext body.
@@ -78,7 +78,7 @@ final class CryptoTest extends TestCase {
 
 	public function test_truncated_payload_is_rejected(): void {
 		$encrypted = $this->manager->encrypt( 'value' );
-		$marker    = strpos( $encrypted, 'v2:' ) + 3;
+		$marker    = strpos( $encrypted, 'v3:' ) + 3;
 		$truncated = substr( $encrypted, 0, $marker ) . base64_encode( 'short' );
 
 		$this->assertInstanceOf( WP_Error::class, $this->manager->decrypt( $truncated ) );
@@ -86,7 +86,7 @@ final class CryptoTest extends TestCase {
 
 	public function test_non_base64_payload_is_rejected(): void {
 		$encrypted = $this->manager->encrypt( 'value' );
-		$marker    = strpos( $encrypted, 'v2:' ) + 3;
+		$marker    = strpos( $encrypted, 'v3:' ) + 3;
 
 		$this->assertInstanceOf(
 			WP_Error::class,

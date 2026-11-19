@@ -91,7 +91,45 @@ final class StoresTest extends TestCase {
 		$this->assertSame( 0, $store->clean() );
 		$this->assertSame( array(), $this->db->log );
 
-		$this->assertTrue( ( new Limiter( $store, 's', self::NOW ) )->hit( 'a:b', 1, 600 )->allowed );
+		$reported = array();
+		$limiter  = ( new Limiter( $store, 's', self::NOW ) )->on_failure(
+			static function ( string $key, bool $allowed ) use ( &$reported ): void {
+				$reported[] = $allowed;
+			}
+		);
+
+		$refused = $limiter->hit( 'a:b', 1, 600 );
+
+		$this->assertTrue( $refused->denied(), 'Refused by default, as the retired package refused by throwing.' );
+		$this->assertTrue( $refused->failed );
+		$this->assertTrue( $limiter->hit( 'a:b', 1, 600, true )->allowed, 'A call can let it through.' );
+		$this->assertTrue( $limiter->for( 'a', 'b' )->hit( 1, 600, true )->failed );
+		$this->assertSame( array( false, true, true ), $reported, 'Every uncounted attempt is told, let through or not.' );
+	}
+
+	public function test_a_limiter_can_fail_open_by_default_and_still_logs(): void {
+		$store = $this->table( static fn(): bool => false );
+		$log   = (string) tempnam( sys_get_temp_dir(), 'rl' );
+		$was   = ini_set( 'error_log', $log );
+
+		try {
+			$limiter = ( new Limiter( $store, 's', self::NOW ) )->fail_open();
+
+			$this->assertTrue( $limiter->hit( 'a:b', 1, 600 )->allowed );
+			$this->assertTrue( $limiter->hit( 'a:b', 1, 600, false )->denied(), 'A call can still refuse it.' );
+			$this->assertStringContainsString( 'the attempt was let through', (string) file_get_contents( $log ) );
+			$this->assertStringContainsString( 'the attempt was refused', (string) file_get_contents( $log ) );
+		} finally {
+			ini_set( 'error_log', (string) $was );
+			unlink( $log );
+		}
+	}
+
+	public function test_a_counted_attempt_is_not_a_failure(): void {
+		$decision = ( new Limiter( new Memory( self::NOW ), 's', self::NOW ) )->on_failure( fn() => $this->fail( 'Reported a count.' ) )->hit( 'a:b', 1, 600 );
+
+		$this->assertTrue( $decision->allowed );
+		$this->assertFalse( $decision->failed );
 	}
 
 	public function test_table_ready_is_asked(): void {

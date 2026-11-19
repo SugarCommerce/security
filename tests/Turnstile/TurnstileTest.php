@@ -183,7 +183,7 @@ final class TurnstileTest extends TestCase {
 	}
 
 	public function test_a_token_is_asked_about_once_a_request(): void {
-		$GLOBALS['ts_responses'][] = ts_answer( array( 'success' => true ) );
+		$GLOBALS['ts_responses'][] = ts_answer( array( 'success' => true, 'hostname' => 'example.com', 'action' => 'signup' ) );
 
 		$turnstile = $this->turnstile();
 
@@ -207,6 +207,18 @@ final class TurnstileTest extends TestCase {
 
 		$this->assertSame( 'demo_turnstile_failed', $turnstile->verify( 'a', 'signup' )->get_error_code() );
 		$this->assertSame( 'demo_turnstile_failed', $turnstile->verify( 'b', 'signup' )->get_error_code() );
+	}
+
+	public function test_an_answer_without_the_hostname_or_action_fails(): void {
+		$GLOBALS['ts_responses'] = array(
+			ts_answer( array( 'success' => true, 'hostname' => 'example.com' ) ),
+			ts_answer( array( 'success' => true, 'action' => 'signup' ) ),
+		);
+
+		$turnstile = $this->turnstile();
+
+		$this->assertSame( 'demo_turnstile_failed', $turnstile->verify( 'a', 'signup' )->get_error_code(), 'A widget without data-action is not this place.' );
+		$this->assertSame( 'demo_turnstile_failed', $turnstile->verify( 'b', 'signup' )->get_error_code(), 'No hostname is not this site.' );
 	}
 
 	public function test_the_sites_own_hostnames_with_and_without_www(): void {
@@ -236,7 +248,7 @@ final class TurnstileTest extends TestCase {
 	}
 
 	public function test_a_token_older_than_max_age_is_incomplete(): void {
-		$GLOBALS['ts_responses'][] = ts_answer( array( 'success' => true, 'challenge_ts' => '2001-01-01T00:00:00Z' ) );
+		$GLOBALS['ts_responses'][] = ts_answer( array( 'success' => true, 'hostname' => 'example.com', 'action' => 'signup', 'challenge_ts' => '2001-01-01T00:00:00Z' ) );
 
 		$this->assertSame( 'demo_turnstile_incomplete', $this->turnstile( array( 'max_age' => 120 ) )->verify( 'tok', 'signup' )->get_error_code() );
 	}

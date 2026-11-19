@@ -69,9 +69,8 @@ final class RulesTest extends TestCase {
 	 */
 	public static function unlimited(): array {
 		return array(
-			'unknown action' => array( 'nope', '1.2.3.4' ),
-			'empty key'      => array( 'lookup', '' ),
-			'blank key'      => array( 'lookup', '   ' ),
+			'unknown action'            => array( 'nope', '1.2.3.4' ),
+			'unknown action, empty key' => array( 'nope', '' ),
 		);
 	}
 
@@ -87,6 +86,21 @@ final class RulesTest extends TestCase {
 		}
 
 		$this->assertTrue( $rules->allows( $action, $key ) );
+	}
+
+	public function test_an_empty_key_is_limited_per_address(): void {
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.9';
+
+		try {
+			$rules = $this->rules();
+
+			$this->assertTrue( $rules->hit( 'lookup', '' )->allowed );
+			$this->assertTrue( $rules->hit( 'lookup', '  ' )->allowed );
+			$this->assertTrue( $rules->hit( 'lookup', '' )->denied(), 'Two a window, then refused.' );
+			$this->assertFalse( $rules->allows( 'lookup', '203.0.113.9' ) );
+		} finally {
+			unset( $_SERVER['REMOTE_ADDR'] );
+		}
 	}
 
 	public function test_has_names_the_rules_that_exist(): void {

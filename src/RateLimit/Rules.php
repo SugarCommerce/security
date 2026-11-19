@@ -24,17 +24,13 @@ namespace SugarCommerce\Security\RateLimit;
  * get?" is answered by a grep that finds two different answers. With it
  * the numbers live in one place and a call site names the action.
  *
- * Two cases are never limited, on purpose, and both answer with
- * {@see Decision::unlimited()} rather than throwing:
+ * **An action with no rule is never limited**, on purpose, and answers
+ * with {@see Decision::unlimited()} rather than throwing: a typo in an
+ * action name should not take an endpoint down; {@see self::has()} is
+ * there for a test that wants to prove every name it uses is real.
  *
- * - **An action with no rule.** A typo in an action name should not take
- *   an endpoint down; {@see self::has()} is there for a test that wants to
- *   prove every name it uses is real.
- * - **An empty key.** The caller had nothing to count against — no address
- *   behind a misconfigured proxy, no email on a form. Counting every such
- *   caller against one shared '' counter would let any of them lock out
- *   all the others, which is the failure {@see Limiter::for()} exists to
- *   prevent.
+ * **An empty key is the visitor's address**, as {@see Limiter::for()} fills
+ * it in: a form with no email is still limited, per address.
  *
  * @since 1.0.0
  */
@@ -77,17 +73,21 @@ final readonly class Rules {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $action An action named in the rules.
-	 * @param string $key    What to count against — an address, a key, an
-	 *                       email.
+	 * @param string    $action    An action named in the rules.
+	 * @param string    $key       What to count against — an address, a
+	 *                             key, an email. Empty is the visitor's
+	 *                             address.
+	 * @param bool|null $fail_open When the store cannot count: true lets
+	 *                             the attempt through, false refuses it,
+	 *                             null takes the limiter's default.
 	 *
 	 * @return Decision
 	 */
 	#[\NoDiscard( 'A denied decision must be enforced; counting alone limits nothing.' )]
-	public function hit( string $action, string $key ): Decision {
-		$rule = $this->rule( $action, $key );
+	public function hit( string $action, string $key, ?bool $fail_open = null ): Decision {
+		$rule = $this->rule( $action );
 
-		return null === $rule ? Decision::unlimited() : $this->limiter->for( $action, $key )->hit( ...$rule );
+		return null === $rule ? Decision::unlimited() : $this->limiter->for( $action, $key )->hit( $rule[0], $rule[1], $fail_open );
 	}
 
 	/**
@@ -105,7 +105,7 @@ final readonly class Rules {
 	 */
 	#[\NoDiscard( 'Checking only answers a question.' )]
 	public function check( string $action, string $key ): Decision {
-		$rule = $this->rule( $action, $key );
+		$rule = $this->rule( $action );
 
 		return null === $rule ? Decision::unlimited() : $this->limiter->for( $action, $key )->check( ...$rule );
 	}
@@ -124,7 +124,7 @@ final readonly class Rules {
 	 * @return void
 	 */
 	public function reset( string $action, string $key ): void {
-		$rule = $this->rule( $action, $key );
+		$rule = $this->rule( $action );
 
 		if ( null !== $rule ) {
 			$this->limiter->for( $action, $key )->reset( $rule[1] );
@@ -192,11 +192,10 @@ final readonly class Rules {
 	 * @since 1.0.0
 	 *
 	 * @param string $action Action name.
-	 * @param string $key    What is being counted.
 	 *
 	 * @return array{0: int, 1: int}|null
 	 */
-	private function rule( string $action, string $key ): ?array {
-		return '' === trim( $key ) || ! isset( $this->rules[ $action ] ) ? null : $this->rules[ $action ];
+	private function rule( string $action ): ?array {
+		return $this->rules[ $action ] ?? null;
 	}
 }

@@ -18,12 +18,11 @@ namespace SugarCommerce\Security\RateLimit;
  *
  *     $limiter->for( 'login', $ip )->hit( 5, 600 );
  *
- * **Nothing to count against is no limit.** An empty action or identity
- * -- a request with no address, a form with no email -- is never limited.
- * Counting it would put every such caller on one shared counter, and any
- * of them could then lock out all the others: a limit that reads as
- * protection and works as an outage. The caller that needs a limit there
- * has to say what to count.
+ * **Nothing to count against is the visitor's address.** An empty
+ * identity -- a form with no email -- is filled in by {@see Limiter::for()}
+ * with the address the request came from, never left as one shared
+ * counter (any caller could then lock out all the others) and never let
+ * through unlimited.
  *
  * @since 1.0.0
  */
@@ -48,15 +47,18 @@ final readonly class Limit {
 	/**
 	 * Count one more, and say whether it is one too many.
 	 *
-	 * @param int $limit  Attempts allowed in one window. Nought or less is
-	 *                    no limit.
-	 * @param int $window The window's length, in seconds.
+	 * @param int       $limit     Attempts allowed in one window. Nought or
+	 *                             less is no limit.
+	 * @param int       $window    The window's length, in seconds.
+	 * @param bool|null $fail_open When the store cannot count: true lets
+	 *                             the attempt through, false refuses it,
+	 *                             null takes the limiter's default.
 	 *
 	 * @return Decision
 	 * @since 1.0.0
 	 */
-	public function hit( int $limit, int $window ): Decision {
-		return $this->limiter->hit( $this->name(), $limit, $window );
+	public function hit( int $limit, int $window, ?bool $fail_open = null ): Decision {
+		return $this->limiter->hit( $this->name(), $limit, $window, $fail_open );
 	}
 
 	/**
@@ -99,7 +101,7 @@ final readonly class Limit {
 	/**
 	 * The counter's name: `action:identity`, the identity normalised.
 	 *
-	 * '' when either part is empty, which the limiter answers as no limit.
+	 * '' when either part is empty, which the limiter refuses to count.
 	 *
 	 * @return string
 	 * @since 1.0.0

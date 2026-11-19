@@ -97,6 +97,19 @@ function ts_reset(): void {
 }
 
 /**
+ * A key of the caller's own, long enough for the cipher.
+ *
+ * Padded, so a test can still say `ts_key( 'old' )` and `ts_key( 'new' )`.
+ *
+ * @param string $name What tells it apart.
+ *
+ * @return string At least 32 bytes.
+ */
+function ts_key( string $name ): string {
+	return str_pad( $name, 32, '.' );
+}
+
+/**
  * A siteverify answer.
  *
  * @param array<string, mixed> $body The JSON body.

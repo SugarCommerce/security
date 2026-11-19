@@ -17,7 +17,7 @@ final class PrecedenceTest extends TestCase {
 		$GLOBALS['ts_options'] = array();
 		putenv( 'TESTPFX_API_KEY' );
 		// auto_intercept off: it registers WordPress filters we are not exercising.
-		$this->manager = new Secrets( 'testpfx', 'unit-test-key', false );
+		$this->manager = new Secrets( 'testpfx', ts_key( 'unit-test-key' ), false );
 	}
 
 	protected function tearDown(): void {

@@ -35,6 +35,13 @@
     },
     {
       "type": "path",
+      "url": "../network",
+      "options": {
+        "symlink": false
+      }
+    },
+    {
+      "type": "path",
       "url": "../plugin",
       "options": {
         "symlink": false
@@ -45,6 +52,7 @@
     "php": ">=8.3",
     "ext-openssl": "*",
     "sugarcommerce/dates": "dev-main",
+    "sugarcommerce/network": "dev-main",
     "sugarcommerce/plugin": "dev-main"
   },
   "require-dev": {

@@ -52,6 +52,9 @@ final readonly class Decision {
 	 * @param int  $checked_at Unix time the decision was made.
 	 * @param bool $limited    Whether a limit applied at all. False only
 	 *                         for {@see self::unlimited()}.
+	 * @param bool $failed     Whether the store could not count, so
+	 *                         `$allowed` is the failure policy's answer
+	 *                         and not the count's.
 	 *
 	 * @since 1.0.0
 	 */
@@ -63,7 +66,8 @@ final readonly class Decision {
 		public int $reset,
 		public int $window,
 		public int $checked_at,
-		public bool $limited = true
+		public bool $limited = true,
+		public bool $failed = false
 	) {
 	}
 

@@ -96,14 +96,21 @@ final class LimiterTest extends TestCase {
 		$this->assertSame( 0, $limiter->count( 'a:b', 600 ) );
 	}
 
-	public function test_an_empty_name_is_never_one_shared_counter(): void {
+	/**
+	 * '' would be one counter for everybody with nothing to count against;
+	 * the retired package refused it by throwing, and so does this.
+	 */
+	public function test_an_empty_name_is_refused_not_one_shared_counter(): void {
 		$limiter = $this->limiter( new Memory( self::NOW ) );
 
-		for ( $i = 0; $i < 3; $i++ ) {
-			$this->assertFalse( $limiter->hit( '  ', 1, 600 )->limited );
+		foreach ( array( 'hit', 'check', 'count', 'reset' ) as $method ) {
+			try {
+				'hit' === $method || 'check' === $method ? $limiter->{$method}( '  ', 1, 600 ) : $limiter->{$method}( '', 600 );
+				$this->fail( "{$method}() counted a counter with no name." );
+			} catch ( \InvalidArgumentException ) {
+				$this->addToAssertionCount( 1 );
+			}
 		}
-
-		$this->assertSame( 0, $limiter->count( '', 600 ) );
 	}
 
 	public function test_check_looks_without_counting(): void {
@@ -177,7 +184,7 @@ final class LimiterTest extends TestCase {
 		$this->assertSame( 1077, $store->asked[0] );
 	}
 
-	public function test_a_store_that_cannot_count_lets_the_attempt_through(): void {
+	public function test_a_store_that_cannot_count_refuses_unless_told_otherwise(): void {
 		$store = new class() implements Store {
 			public function increment( string $key, int $ttl ): int {
 				return 0;
@@ -191,10 +198,26 @@ final class LimiterTest extends TestCase {
 			}
 		};
 
-		$decision = ( new Limiter( $store, 'secret', self::NOW ) )->hit( 'a:b', 1, 600 );
+		$told    = 0;
+		$limiter = ( new Limiter( $store, 'secret', self::NOW ) )->on_failure(
+			static function () use ( &$told ): void {
+				++$told;
+			}
+		);
 
-		$this->assertTrue( $decision->allowed );
-		$this->assertSame( 1, $decision->remaining );
+		$refused = $limiter->hit( 'a:b', 1, 600 );
+
+		$this->assertTrue( $refused->denied() );
+		$this->assertTrue( $refused->failed );
+		$this->assertSame( 0, $refused->remaining );
+		$this->assertSame( 477, $refused->retry_after(), 'Come back when the window ends.' );
+
+		$allowed = $limiter->hit( 'a:b', 1, 600, true );
+
+		$this->assertTrue( $allowed->allowed );
+		$this->assertTrue( $allowed->failed );
+		$this->assertSame( 1, $allowed->remaining );
+		$this->assertSame( 2, $told );
 	}
 
 	public function test_a_window_below_one_second_is_one_second(): void {
@@ -225,17 +248,62 @@ final class LimiterTest extends TestCase {
 		$this->assertTrue( $limiter->for( 'login', '198.51.100.1' )->hit( 1, 600 )->allowed, 'Another caller has its own counter.' );
 	}
 
-	public function test_for_with_nothing_to_count_against_is_unlimited(): void {
-		$limiter = $this->limiter( new Memory( self::NOW ) );
+	/**
+	 * A form with no email is still limited: against the address the
+	 * request came from, not let through and not one shared counter.
+	 */
+	public function test_an_empty_identity_counts_against_the_visitors_address(): void {
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.9';
 
-		foreach ( array( array( 'login', '' ), array( 'login', '   ' ), array( '', '203.0.113.9' ) ) as [ $action, $identity ] ) {
-			$limit = $limiter->for( $action, $identity );
+		try {
+			$limiter = $this->limiter( new Memory( self::NOW ) );
 
-			$this->assertSame( '', $limit->name() );
-			$this->assertFalse( $limit->hit( 1, 600 )->limited );
-			$this->assertFalse( $limit->hit( 1, 600 )->limited );
-			$this->assertSame( 0, $limit->count( 600 ) );
+			foreach ( array( '', '   ' ) as $identity ) {
+				$this->assertSame( 'login:203.0.113.9', $limiter->for( 'login', $identity )->name() );
+			}
+
+			$this->assertTrue( $limiter->for( 'login', '' )->hit( 1, 600 )->allowed );
+			$this->assertTrue( $limiter->for( 'login', '' )->hit( 1, 600 )->denied(), 'The second is over the limit, not unlimited.' );
+			$this->assertTrue( $limiter->for( 'login', '203.0.113.9' )->check( 1, 600 )->denied(), 'The same counter as the address given.' );
+		} finally {
+			unset( $_SERVER['REMOTE_ADDR'] );
 		}
+	}
+
+	public function test_a_site_behind_a_proxy_says_who_the_visitor_is(): void {
+		$_SERVER['REMOTE_ADDR'] = '10.0.0.5';
+
+		try {
+			$limiter = $this->limiter( new Memory( self::NOW ) )->client( static fn(): string => '198.51.100.7' );
+
+			$this->assertSame( 'login:198.51.100.7', $limiter->for( 'login', '' )->name() );
+		} finally {
+			unset( $_SERVER['REMOTE_ADDR'] );
+		}
+	}
+
+	/**
+	 * @return array<string, array{string, string}>
+	 */
+	public static function nothing_to_count(): array {
+		return array(
+			'no action'                     => array( '', '203.0.113.9' ),
+			'no identity and no address'    => array( 'login', '' ),
+			'blank identity and no address' => array( 'login', '  ' ),
+		);
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider( 'nothing_to_count' )]
+	public function test_nothing_to_count_against_is_refused( string $action, string $identity ): void {
+		$this->expectException( \InvalidArgumentException::class );
+
+		$this->limiter( new Memory( self::NOW ) )->for( $action, $identity );
+	}
+
+	public function test_a_resolver_with_no_address_is_refused_too(): void {
+		$this->expectException( \InvalidArgumentException::class );
+
+		$this->limiter( new Memory( self::NOW ) )->client( static fn(): ?string => null )->for( 'login', '' );
 	}
 
 	public function test_unlimited_is_allowed_and_silent(): void {
