@@ -35,13 +35,6 @@
     },
     {
       "type": "path",
-      "url": "../network",
-      "options": {
-        "symlink": false
-      }
-    },
-    {
-      "type": "path",
       "url": "../plugin",
       "options": {
         "symlink": false
@@ -52,7 +45,6 @@
     "php": ">=8.3",
     "ext-openssl": "*",
     "sugarcommerce/dates": "dev-main",
-    "sugarcommerce/network": "dev-main",
     "sugarcommerce/plugin": "dev-main"
   },
   "require-dev": {
@@ -63,6 +55,7 @@
   },
   "suggest": {
     "ext-apcu": "For the APCu rate-limit store.",
+    "sugarcommerce/network": "ClientIp, to tell a rate limit who the visitor is behind a proxy (Limiter::client()).",
     "ext-intl": "For slugs from titles in any script, not only accented Latin."
   },
   "autoload": {

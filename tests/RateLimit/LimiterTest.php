@@ -300,6 +300,22 @@ final class LimiterTest extends TestCase {
 		$this->limiter( new Memory( self::NOW ) )->for( $action, $identity );
 	}
 
+	/**
+	 * Only an address is an address: a proxy that writes `unknown` into
+	 * REMOTE_ADDR is not one counter for everybody.
+	 */
+	public function test_a_remote_addr_that_is_not_an_address_is_none(): void {
+		$_SERVER['REMOTE_ADDR'] = 'unknown';
+
+		try {
+			$this->expectException( \InvalidArgumentException::class );
+
+			$this->limiter( new Memory( self::NOW ) )->for( 'login', '' );
+		} finally {
+			unset( $_SERVER['REMOTE_ADDR'] );
+		}
+	}
+
 	public function test_a_resolver_with_no_address_is_refused_too(): void {
 		$this->expectException( \InvalidArgumentException::class );
 

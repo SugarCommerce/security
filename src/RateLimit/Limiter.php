@@ -14,7 +14,6 @@ namespace SugarCommerce\Security\RateLimit;
 
 use InvalidArgumentException;
 use SugarCommerce\Dates\Clock;
-use SugarCommerce\Network\ClientIp;
 use SugarCommerce\Security\RateLimit\Stores\Fallback;
 use SugarCommerce\Security\RateLimit\Stores\ObjectCache;
 use SugarCommerce\Security\RateLimit\Stores\Table;
@@ -153,11 +152,14 @@ final class Limiter {
 	/**
 	 * Who an empty identity is counted as.
 	 *
-	 * The visitor's address. By default {@see ClientIp::resolve()} with no
-	 * proxy trusted, which is the connection's own address: right for a
-	 * site reached directly, and on a site behind a proxy one shared
-	 * counter per proxy -- so a site behind one passes the resolver it
-	 * already trusts.
+	 * The visitor's address. By default the connection's own
+	 * (`REMOTE_ADDR`, when it is an address), which is what
+	 * sugarcommerce/network's `ClientIp::resolve()` answers with no proxy
+	 * trusted: right for a site reached directly, and on a site behind a
+	 * proxy one shared counter per proxy -- so a site behind one passes the
+	 * resolver it already trusts:
+	 *
+	 *     $limiter->client( fn() => ClientIp::resolve( null, TrustedProxies::cloudflare() ) );
 	 *
 	 * @param callable $resolver Returns the address, or null/'' for none.
 	 *
@@ -228,7 +230,7 @@ final class Limiter {
 		}
 
 		if ( '' === trim( $identity ) ) {
-			$identity = trim( (string) ( null === $this->client ? ClientIp::resolve() : call_user_func( $this->client ) ) );
+			$identity = trim( (string) ( null === $this->client ? self::remote_address() : call_user_func( $this->client ) ) );
 		}
 
 		if ( '' === $identity ) {
@@ -349,6 +351,19 @@ final class Limiter {
 		self::named( $name );
 
 		$this->store->forget( $this->key( $name, max( 1, $window ), $this->now() ) );
+	}
+
+	/**
+	 * The address the connection came from, when it is one.
+	 *
+	 * @return string '' when there is none: a command line, say.
+	 * @since 1.0.0
+	 */
+	private static function remote_address(): string {
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated, WordPress.Security.ValidatedSanitizedInput.MissingUnslash, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Validated as an address on the next line; only an address is used.
+		$address = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? trim( $_SERVER['REMOTE_ADDR'] ) : '';
+
+		return false === filter_var( $address, FILTER_VALIDATE_IP ) ? '' : $address;
 	}
 
 	/**

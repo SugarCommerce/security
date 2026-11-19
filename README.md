@@ -176,8 +176,9 @@ counts as its /64; counters hold a salted hash, never an address.
 
 Nothing to count against is the visitor's address, never no limit:
 `for( 'reset_mail', '' )` counts against the address the request came from
-(`ClientIp::resolve()` from `sugarcommerce/network`, no proxy trusted). A site
-behind a proxy says who the visitor is with `$limiter->client( fn() => … )`. An
+(`REMOTE_ADDR`, as `sugarcommerce/network`'s `ClientIp::resolve()` gives it with
+no proxy trusted). A site behind a proxy says who the visitor is with
+`$limiter->client( fn() => ClientIp::resolve( null, $its_trusted_proxies ) )`. An
 empty action, or no identity and no address (a command line), throws.
 
 A store that cannot count — the table not installed, the database refusing —
