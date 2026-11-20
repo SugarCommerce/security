@@ -27,6 +27,7 @@ read against one clock a test can stop.
 * Add two-factor sign-in with any authenticator app, with recovery codes
 * Stop form bots without a captcha, and count visitors without keeping their addresses
 * Print an SVG somebody else wrote -- an icon, a logo -- with nothing in it that runs
+* Weigh a country in a fraud rule: elevated payment-fraud rates, comprehensive sanctions
 
 ## Installation
 
@@ -286,6 +287,22 @@ echo Svg::render( $clean, [ 'size' => 20 ] );            // decorative: aria-hid
 echo Svg::render( $clean, [ 'label' => 'Cart' ] );       // an image named "Cart"
 ```
 
+## Countries a rule looks at twice
+
+Two point-in-time lists, kept as data in `data/country-risk.php`: territories
+with elevated payment-fraud rates, and territories under comprehensive
+(OFAC) sanctions. Policy, not geography -- sugarcommerce/geo names the
+countries; `CountryRisk` says which ones a fraud rule should weigh.
+
+```php
+use SugarCommerce\Security\CountryRisk;
+
+CountryRisk::is_high_risk( 'ng' );    // true -- a signal to weigh, never a reason to refuse on its own
+CountryRisk::is_sanctioned( 'KP' );   // true -- a coarse first gate, not a compliance product
+CountryRisk::high_risk();             // [ 'BY', 'BD', … ] codes; names from geo's Countries::all()
+CountryRisk::sanctioned();            // [ 'CU', 'IR', 'KP', 'RU', 'SY', 'VE' ]
+```
+
 ## Freezing the clock
 
 Everything here that asks the time reads `SugarCommerce\Dates\Clock`, so a test
@@ -312,7 +329,7 @@ What each part defends against:
 `Tokens/` signed links, `Encryption/` the cipher and `Secrets`, `RateLimit/`
 the limiter and its stores, `Turnstile/` Cloudflare Turnstile, `TwoFactor/`
 TOTP and recovery codes, and at the top the small pieces (`Keys`, `Random`,
-`Code`, `ApiKey`, `Uuid`, `Slug`, `Hash`, `FormGuard`, `Svg`). `Models/` holds the data
+`Code`, `ApiKey`, `Uuid`, `Slug`, `Hash`, `FormGuard`, `Svg`, `CountryRisk`, whose lists are `data/country-risk.php`). `Models/` holds the data
 shapes and nothing that does work, by the same areas: a rate-limit `Decision`, a
 verified `Token` and why one was refused (`Tokens/Reason`), a Turnstile
 `Verification` with its `Reason` and Cloudflare `ErrorCode`, and the TOTP
