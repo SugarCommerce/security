@@ -28,7 +28,7 @@ final readonly class Decision {
 	 *
 	 * @since 1.0.0
 	 */
-	public const LEGACY = 'legacy';
+	public const string LEGACY = 'legacy';
 
 	/**
 	 * `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (seconds
@@ -37,7 +37,7 @@ final readonly class Decision {
 	 *
 	 * @since 1.0.0
 	 */
-	public const STANDARD = 'standard';
+	public const string STANDARD = 'standard';
 
 	/**
 	 * A decision.

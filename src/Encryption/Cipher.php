@@ -73,7 +73,7 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 */
-	private const ALGORITHM = 'aes-256-gcm';
+	private const string ALGORITHM = 'aes-256-gcm';
 
 	/**
 	 * Unauthenticated cipher, kept only to read values written by the
@@ -81,7 +81,7 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 */
-	private const LEGACY_ALGORITHM = 'aes-256-cbc';
+	private const string LEGACY_ALGORITHM = 'aes-256-cbc';
 
 	/**
 	 * Marker distinguishing the authenticated format from the legacy one.
@@ -91,7 +91,7 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 */
-	private const FORMAT = 'v3:';
+	private const string FORMAT = 'v3:';
 
 	/**
 	 * Marker of the authenticated format written under the shared key,
@@ -99,14 +99,14 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 */
-	private const SHARED_FORMAT = 'v2:';
+	private const string SHARED_FORMAT = 'v2:';
 
 	/**
 	 * The shortest key of the caller's own, in bytes.
 	 *
 	 * @since 1.0.0
 	 */
-	public const MIN_KEY_BYTES = 32;
+	public const int MIN_KEY_BYTES = 32;
 
 	/**
 	 * HKDF info a purpose key is derived with, before the purpose label.
@@ -115,7 +115,7 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 */
-	private const PURPOSE_CONTEXT = 'sugarcommerce/security/cipher/v3/';
+	private const string PURPOSE_CONTEXT = 'sugarcommerce/security/cipher/v3/';
 
 	/**
 	 * GCM nonce length in bytes. 96 bits is the length GCM is specified
@@ -123,14 +123,14 @@ final class Cipher {
 	 *
 	 * @since 1.0.0
 	 */
-	private const IV_LENGTH = 12;
+	private const int IV_LENGTH = 12;
 
 	/**
 	 * GCM authentication tag length in bytes.
 	 *
 	 * @since 1.0.0
 	 */
-	private const TAG_LENGTH = 16;
+	private const int TAG_LENGTH = 16;
 
 	/**
 	 * The 32-byte key.

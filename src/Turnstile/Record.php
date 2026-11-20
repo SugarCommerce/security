@@ -40,7 +40,7 @@ use SensitiveParameter;
  *
  * @since 1.0.0
  */
-final class Record {
+final readonly class Record {
 
 	/**
 	 * A record kept in one option.

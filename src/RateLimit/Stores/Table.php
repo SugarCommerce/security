@@ -90,6 +90,7 @@ final class Table implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function increment( string $key, int $ttl ): int {
 		global $wpdb;
 
@@ -134,6 +135,7 @@ final class Table implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function get( string $key ): int {
 		global $wpdb;
 
@@ -156,6 +158,7 @@ final class Table implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function forget( string $key ): void {
 		global $wpdb;
 

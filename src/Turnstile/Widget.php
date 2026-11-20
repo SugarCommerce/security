@@ -42,14 +42,14 @@ use SugarCommerce\Plugin\Assets;
  *
  * @since 1.0.0
  */
-final class Widget {
+final readonly class Widget {
 
 	/**
 	 * Cloudflare's script, asked not to draw anything by itself.
 	 *
 	 * @since 1.0.0
 	 */
-	public const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+	public const string SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 
 	/**
 	 * The slot's rules: no room until there is something to show.
@@ -59,7 +59,7 @@ final class Widget {
 	 *
 	 * @since 1.0.0
 	 */
-	private const STYLES = '[data-turnstile-slot]{height:0;overflow:hidden;pointer-events:none;position:absolute;left:0;top:0;width:100%}'
+	private const string STYLES = '[data-turnstile-slot]{height:0;overflow:hidden;pointer-events:none;position:absolute;left:0;top:0;width:100%}'
 		. '[data-turnstile-slot].is-visible{height:auto;min-height:65px;overflow:visible;pointer-events:auto;position:static}'
 		. '[data-turnstile-widget]{max-width:25em}';
 

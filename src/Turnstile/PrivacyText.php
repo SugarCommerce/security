@@ -33,21 +33,21 @@ namespace SugarCommerce\Security\Turnstile;
  *
  * @since 1.0.0
  */
-final class PrivacyText {
+final readonly class PrivacyText {
 
 	/**
 	 * Cloudflare's privacy policy.
 	 *
 	 * @since 1.0.0
 	 */
-	public const POLICY = 'https://www.cloudflare.com/privacypolicy/';
+	public const string POLICY = 'https://www.cloudflare.com/privacypolicy/';
 
 	/**
 	 * Cloudflare's Turnstile privacy addendum.
 	 *
 	 * @since 1.0.0
 	 */
-	public const ADDENDUM = 'https://www.cloudflare.com/turnstile-privacy-policy/';
+	public const string ADDENDUM = 'https://www.cloudflare.com/turnstile-privacy-policy/';
 
 	/**
 	 * The paragraph for one plugin's Turnstile.

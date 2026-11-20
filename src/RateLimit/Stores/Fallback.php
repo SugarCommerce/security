@@ -44,6 +44,7 @@ final readonly class Fallback implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function increment( string $key, int $ttl ): int {
 		$count = $this->first->increment( $key, $ttl );
 
@@ -53,6 +54,7 @@ final readonly class Fallback implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function get( string $key ): int {
 		$count = $this->first->get( $key );
 
@@ -62,6 +64,7 @@ final readonly class Fallback implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function forget( string $key ): void {
 		$this->first->forget( $key );
 		$this->then->forget( $key );

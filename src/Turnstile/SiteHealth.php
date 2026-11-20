@@ -31,7 +31,7 @@ namespace SugarCommerce\Security\Turnstile;
  *
  * @since 1.0.0
  */
-final class SiteHealth {
+final readonly class SiteHealth {
 
 	/**
 	 * Site Health for one plugin's Turnstile.

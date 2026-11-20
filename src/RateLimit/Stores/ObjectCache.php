@@ -27,7 +27,7 @@ use SugarCommerce\Security\RateLimit\Store;
  *
  * @since 1.0.0
  */
-final class ObjectCache implements Store {
+final readonly class ObjectCache implements Store {
 
 	/**
 	 * A store.
@@ -36,12 +36,13 @@ final class ObjectCache implements Store {
 	 *
 	 * @since 1.0.0
 	 */
-	public function __construct( private readonly string $group = 'rate_limit' ) {
+	public function __construct( private string $group = 'rate_limit' ) {
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function increment( string $key, int $ttl ): int {
 		if ( ! wp_using_ext_object_cache() ) {
 			return 0;
@@ -59,6 +60,7 @@ final class ObjectCache implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function get( string $key ): int {
 		if ( ! wp_using_ext_object_cache() ) {
 			return 0;
@@ -70,6 +72,7 @@ final class ObjectCache implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function forget( string $key ): void {
 		wp_cache_delete( $key, $this->group );
 	}

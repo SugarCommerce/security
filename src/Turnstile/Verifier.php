@@ -54,7 +54,7 @@ final class Verifier {
 	 *
 	 * @since 1.0.0
 	 */
-	public const ENDPOINT = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+	public const string ENDPOINT = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 	/**
 	 * The form field Cloudflare's own widget puts its token in.
@@ -64,7 +64,7 @@ final class Verifier {
 	 *
 	 * @since 1.0.0
 	 */
-	public const FIELD = 'cf-turnstile-response';
+	public const string FIELD = 'cf-turnstile-response';
 
 	/**
 	 * The most of an answer that is read, in bytes.
@@ -74,21 +74,21 @@ final class Verifier {
 	 *
 	 * @since 1.0.0
 	 */
-	public const MAX_ANSWER = 65536;
+	public const int MAX_ANSWER = 65536;
 
 	/**
 	 * The longest token Cloudflare issues: "Maximum token length: 2048 characters".
 	 *
 	 * @since 1.0.0
 	 */
-	public const MAX_TOKEN = 2048;
+	public const int MAX_TOKEN = 2048;
 
 	/**
 	 * Seconds to wait for Cloudflare. Short, because somebody is waiting.
 	 *
 	 * @since 1.0.0
 	 */
-	public const TIMEOUT = 5;
+	public const int TIMEOUT = 5;
 
 	/**
 	 * Lower-cased hostnames a token may come from. Empty for any.
@@ -249,7 +249,8 @@ final class Verifier {
 			return Verification::unanswered( Reason::Unreachable );
 		}
 
-		$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		$raw  = (string) wp_remote_retrieve_body( $response );
+		$body = json_validate( $raw ) ? json_decode( $raw, true ) : null;
 
 		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
 			// Whatever error codes came with it are kept, for the log.

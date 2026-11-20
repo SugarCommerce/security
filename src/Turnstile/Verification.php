@@ -37,7 +37,7 @@ use Exception;
  *
  * @since 1.0.0
  */
-final class Verification {
+final readonly class Verification {
 
 	/**
 	 * An answer.
@@ -52,12 +52,12 @@ final class Verification {
 	 * @since 1.0.0
 	 */
 	private function __construct(
-		public readonly bool $success,
-		public readonly ?Reason $reason = null,
-		public readonly array $codes = array(),
-		public readonly string $hostname = '',
-		public readonly string $action = '',
-		public readonly ?DateTimeImmutable $challenged_at = null
+		public bool $success,
+		public ?Reason $reason = null,
+		public array $codes = array(),
+		public string $hostname = '',
+		public string $action = '',
+		public ?DateTimeImmutable $challenged_at = null
 	) {
 	}
 

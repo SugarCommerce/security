@@ -46,6 +46,7 @@ final class Memory implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function increment( string $key, int $ttl ): int {
 		$now = $this->now();
 
@@ -59,6 +60,7 @@ final class Memory implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function get( string $key ): int {
 		if ( ! isset( $this->counters[ $key ] ) || $this->counters[ $key ][1] <= $this->now() ) {
 			return 0;
@@ -70,6 +72,7 @@ final class Memory implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function forget( string $key ): void {
 		unset( $this->counters[ $key ] );
 	}

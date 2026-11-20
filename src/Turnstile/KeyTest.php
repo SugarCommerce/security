@@ -33,7 +33,7 @@ namespace SugarCommerce\Security\Turnstile;
  *
  * @since 1.0.0
  */
-final class KeyTest {
+final readonly class KeyTest {
 
 	/**
 	 * The test for one plugin's keys.

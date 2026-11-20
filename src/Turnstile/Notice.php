@@ -29,7 +29,7 @@ namespace SugarCommerce\Security\Turnstile;
  *
  * @since 1.0.0
  */
-final class Notice {
+final readonly class Notice {
 
 	/**
 	 * The notice for one plugin's Turnstile.

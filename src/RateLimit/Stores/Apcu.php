@@ -62,6 +62,7 @@ final readonly class Apcu implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function increment( string $key, int $ttl ): int {
 		if ( ! self::available() ) {
 			return 0;
@@ -77,6 +78,7 @@ final readonly class Apcu implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function get( string $key ): int {
 		if ( ! self::available() ) {
 			return 0;
@@ -90,6 +92,7 @@ final readonly class Apcu implements Store {
 	/**
 	 * {@inheritDoc}
 	 */
+	#[\Override]
 	public function forget( string $key ): void {
 		if ( self::available() ) {
 			apcu_delete( $this->prefix . $key );

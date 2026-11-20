@@ -32,7 +32,7 @@ namespace SugarCommerce\Security;
  *
  * @since 1.0.0
  */
-final class Keys {
+final readonly class Keys {
 
 	/**
 	 * Domain separation for a signing key.
@@ -42,14 +42,14 @@ final class Keys {
 	 *
 	 * @since 1.0.0
 	 */
-	private const SIGNING_CONTEXT = 'arraypress/wp-signed-tokens/secret/v1/';
+	private const string SIGNING_CONTEXT = 'arraypress/wp-signed-tokens/secret/v1/';
 
 	/**
 	 * The constant that, when defined, is the encryption key.
 	 *
 	 * @since 1.0.0
 	 */
-	public const ENCRYPTION_CONSTANT = 'WP_ENCRYPTION_KEY';
+	public const string ENCRYPTION_CONSTANT = 'WP_ENCRYPTION_KEY';
 
 	/**
 	 * A signing secret derived from this site's salts.
@@ -130,14 +130,14 @@ final class Keys {
 	 *
 	 * @since 1.0.0
 	 */
-	private const KEY_CONSTANTS = array( 'AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY' );
+	private const array KEY_CONSTANTS = array( 'AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY' );
 
 	/**
 	 * Every constant core compares when it looks for duplicated salts.
 	 *
 	 * @since 1.0.0
 	 */
-	private const SALT_CONSTANTS = array(
+	private const array SALT_CONSTANTS = array(
 		'AUTH_KEY',
 		'AUTH_SALT',
 		'SECURE_AUTH_KEY',
@@ -155,7 +155,7 @@ final class Keys {
 	 *
 	 * @since 1.0.0
 	 */
-	private const PLACEHOLDER = 'put your unique phrase here';
+	private const string PLACEHOLDER = 'put your unique phrase here';
 
 	/**
 	 * A 32-byte encryption key.
