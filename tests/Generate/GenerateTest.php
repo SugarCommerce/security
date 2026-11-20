@@ -13,10 +13,8 @@ declare( strict_types=1 );
 namespace SugarCommerce\Security\Tests\Generate;
 
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use SugarCommerce\Security\Code;
-use SugarCommerce\Security\Slug;
 use SugarCommerce\Security\ApiKey;
 use SugarCommerce\Security\Random;
 use SugarCommerce\Security\Uuid;
@@ -167,82 +165,6 @@ final class GenerateTest extends TestCase {
 		Code::make( 0, 5 );
 	}
 
-	/* ─── Slugs ─────────────────────────────────────────────────────── */
-
-	#[DataProvider( 'slug_cases' )]
-	public function test_slugs( string $input, string $expected ): void {
-		$this->assertSame( $expected, Slug::make( $input ) );
-	}
-
-	/** @return array<string, array{0: string, 1: string}> */
-	public static function slug_cases(): array {
-		return array(
-			'plain'        => array( 'Hello World', 'hello-world' ),
-			'punctuation'  => array( 'Hello, World!', 'hello-world' ),
-			'apostrophe'   => array( "Dave's Samples", 'daves-samples' ),
-			'curly quote'  => array( 'Dave’s Samples', 'daves-samples' ),
-			'runs'         => array( 'a   b---c', 'a-b-c' ),
-			'edges'        => array( '  --Hello--  ', 'hello' ),
-			'numbers'      => array( 'Volume 2 Part 3', 'volume-2-part-3' ),
-			'accents'      => array( 'Naïve Café', 'naive-cafe' ),
-			'german'       => array( 'Übungsstück', 'ubungsstuck' ),
-		);
-	}
-
-	#[RequiresPhpExtension( 'intl' )]
-	public function test_non_latin_titles_produce_a_usable_slug(): void {
-		// A naive [^a-z0-9] filter returns nothing at all for these.
-		$this->assertSame( 'ri-ben-yunofairu', Slug::make( '日本語のファイル' ) );
-		$this->assertSame( 'russkij-fajl', Slug::make( 'Русский файл' ) );
-	}
-
-	public function test_a_slug_is_never_empty(): void {
-		$this->assertNotSame( '', Slug::make( '!!!' ) );
-		$this->assertNotSame( '', Slug::make( '' ) );
-		$this->assertNotSame( '', Slug::make( '🎵🎹' ) );
-	}
-
-	public function test_slugs_truncate_on_a_word_boundary(): void {
-		$slug = Slug::make( 'the quick brown fox jumps over the lazy dog and keeps running onwards', '-', 30 );
-
-		$this->assertLessThanOrEqual( 30, strlen( $slug ) );
-		$this->assertStringEndsNotWith( '-', $slug );
-		// Cut at a boundary, not mid-word.
-		$this->assertStringNotContainsString( 'ju-', $slug );
-	}
-
-	public function test_uniqueness_appends_a_counter(): void {
-		$taken = array( 'hello-world' => true, 'hello-world-2' => true );
-
-		$this->assertSame(
-			'hello-world-3',
-			Slug::unique( 'Hello World', static fn( string $s ): bool => isset( $taken[ $s ] ) )
-		);
-	}
-
-	public function test_an_unused_slug_is_returned_unchanged(): void {
-		$this->assertSame( 'hello-world', Slug::unique( 'Hello World', static fn(): bool => false ) );
-	}
-
-	public function test_uniqueness_can_keep_the_hosts_own_slug(): void {
-		$taken = array( 'my_slug' => true );
-		$is    = static fn( string $s ): bool => isset( $taken[ $s ] );
-		$keep  = static fn( string $s ): string => strtolower( $s );
-
-		$this->assertSame( 'my_slug-2', Slug::unique( 'My_Slug', $is, '-', $keep ) );
-		$this->assertSame( 'other_slug', Slug::unique( 'Other_Slug', $is, '-', $keep ) );
-		$this->assertSame( 'my-slug-2', Slug::unique( 'my-slug', static fn( string $s ): bool => 'my-slug' === $s ), 'Without one, make() still decides.' );
-	}
-
-	public function test_slug_validation(): void {
-		$this->assertTrue( Slug::is_valid( 'hello-world' ) );
-		$this->assertTrue( Slug::is_valid( 'a1' ) );
-		$this->assertFalse( Slug::is_valid( 'Hello-World' ) );
-		$this->assertFalse( Slug::is_valid( 'hello--world' ) );
-		$this->assertFalse( Slug::is_valid( '-hello' ) );
-		$this->assertFalse( Slug::is_valid( '' ) );
-	}
-
 	/* ─── Tokens ────────────────────────────────────────────────────── */
 
 	public function test_hex_tokens_are_the_right_length(): void {
@@ -321,30 +243,6 @@ final class GenerateTest extends TestCase {
 		}
 
 		$this->assertCount( 200, array_unique( $keys ) );
-	}
-
-	/**
-	 * Core's transliteration is preferred over iconv's.
-	 *
-	 * Order matters and is easy to get backwards. The intl transliterator
-	 * goes first because it is the only one that romanises a Japanese title
-	 * rather than dropping it; core's remove_accents() goes second because it
-	 * is a better Latin table than iconv's; iconv goes last because it is
-	 * what is left.
-	 *
-	 * Putting core first was tried and lost the Japanese case entirely --
-	 * remove_accents() has nothing to say about CJK, so the title came back
-	 * as a random fallback slug.
-	 */
-	public function test_a_japanese_title_is_romanised_not_dropped(): void {
-		if ( ! class_exists( \Transliterator::class ) ) {
-			$this->markTestSkipped( 'intl is not installed.' );
-		}
-
-		$slug = \SugarCommerce\Security\Slug::make( '日本のファイル' );
-
-		$this->assertStringNotContainsString( 'n', substr( $slug, 0, 1 ) === 'n' && 7 === strlen( $slug ) ? 'fallback' : 'ok' );
-		$this->assertMatchesRegularExpression( '/[a-z]{4,}/', $slug );
 	}
 
 	/**

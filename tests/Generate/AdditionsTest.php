@@ -13,60 +13,16 @@ declare( strict_types=1 );
 
 namespace SugarCommerce\Security\Tests\Generate;
 
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCommerce\Dates\Clock;
 use SugarCommerce\Security\ApiKey;
 use SugarCommerce\Security\Random;
-use SugarCommerce\Security\Slug;
 use SugarCommerce\Security\Uuid;
 
 final class AdditionsTest extends TestCase {
 
 	protected function tearDown(): void {
 		Clock::reset();
-	}
-
-	/* ─── Slugs somebody typed ─────────────────────────────────────── */
-
-	/** @return array<string, array{0: mixed, 1: string}> */
-	public static function typed_slugs(): array {
-		return array(
-			'plain'           => array( 'my-shop', 'my-shop' ),
-			'lower-cased'     => array( '  My-Shop ', 'my-shop' ),
-			'digits'          => array( '123', '123' ),
-			'leading hyphen'  => array( '-shop', '' ),
-			'trailing hyphen' => array( 'shop-', '' ),
-			'space inside'    => array( 'my shop', '' ),
-			'underscore'      => array( 'my_shop', '' ),
-			'accented'        => array( 'café', '' ),
-			'too short'       => array( 'ab', '' ),
-			'shortest'        => array( 'abc', 'abc' ),
-			'longest'         => array( 'abcdefghijkl', 'abcdefghijkl' ),
-			'too long'        => array( 'abcdefghijklm', '' ),
-			'reserved'        => array( 'Admin', '' ),
-			'not scalar'      => array( array( 'shop' ), '' ),
-			'empty'           => array( '', '' ),
-			'trailing line'   => array( "shop\n", 'shop' ),
-		);
-	}
-
-	#[DataProvider( 'typed_slugs' )]
-	public function test_clean_accepts_a_typed_slug_or_nothing( mixed $value, string $expected ): void {
-		$this->assertSame( $expected, Slug::clean( $value, 3, 12, array( 'admin' ) ) );
-	}
-
-	public function test_a_reserved_name_given_in_capitals_is_still_refused(): void {
-		$this->assertSame( '', Slug::clean( 'admin', 3, 0, array( 'Admin', 'API' ) ) );
-		$this->assertSame( '', Slug::clean( 'api', 3, 0, array( 'Admin', 'API' ) ) );
-	}
-
-	public function test_clean_has_no_length_cap_by_default(): void {
-		$this->assertSame( str_repeat( 'a', 200 ), Slug::clean( str_repeat( 'a', 200 ) ) );
-	}
-
-	public function test_a_slug_with_a_trailing_newline_is_not_valid(): void {
-		$this->assertFalse( Slug::is_valid( "my-shop\n" ) );
 	}
 
 	/* ─── Short ids ────────────────────────────────────────────────── */

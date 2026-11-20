@@ -151,9 +151,7 @@ $event = Random::id( 'evt' );                             // evt_9f2c41d0a7b3e65
 $id    = Uuid::v7();                                      // sorts by time
 ```
 
-`Slug::make( 'Naïve Café' )` gives `naive-cafe`, `Slug::unique()` asks your own
-callback what is taken, and `Slug::clean( $typed, 3, 30, [ 'admin' ] )` takes a
-handle somebody typed as it is or not at all.
+Slugs are text handling, and live in `sugarcommerce/text` (`Slug`).
 
 ## Rate limits
 
@@ -329,7 +327,7 @@ What each part defends against:
 `Tokens/` signed links, `Encryption/` the cipher and `Secrets`, `RateLimit/`
 the limiter and its stores, `Turnstile/` Cloudflare Turnstile, `TwoFactor/`
 TOTP and recovery codes, and at the top the small pieces (`Keys`, `Random`,
-`Code`, `ApiKey`, `Uuid`, `Slug`, `Hash`, `FormGuard`, `Svg`, `CountryRisk`, whose lists are `data/country-risk.php`). `Models/` holds the data
+`Code`, `ApiKey`, `Uuid`, `Hash`, `FormGuard`, `Svg`, `CountryRisk`, whose lists are `data/country-risk.php`). `Models/` holds the data
 shapes and nothing that does work, by the same areas: a rate-limit `Decision`, a
 verified `Token` and why one was refused (`Tokens/Reason`), a Turnstile
 `Verification` with its `Reason` and Cloudflare `ErrorCode`, and the TOTP
