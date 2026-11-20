@@ -447,22 +447,29 @@ final readonly class Signer {
 	 * verify. Retired shared secrets are derived the same way, so a rotated
 	 * secret keeps verifying what it signed, as with the constructor.
 	 *
+	 * The shared secret is held to the constructor's length. The derived key
+	 * is always 64 hex characters, so it would pass that check whatever it
+	 * came from -- and a key derived from a short secret is only as strong
+	 * as the secret.
+	 *
 	 * ```php
 	 * $links = Signer::derived( $secret, 'shop/download-links/v1' );
 	 * ```
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string             $secret   The shared secret.
-	 * @param string             $context  What the tokens are for. Different
-	 *                                     contexts never verify each other's.
-	 * @param array<int, string> $previous Retired shared secrets.
-	 * @param int|null           $timestamp Fixed "now", for tests.
+	 * @param string       $secret    The shared secret, at least
+	 *                                {@see self::MIN_SECRET_BYTES} bytes.
+	 * @param string       $context   What the tokens are for. Different
+	 *                                contexts never verify each other's.
+	 * @param array<mixed> $previous  Retired shared secrets, held to the same
+	 *                                length. Empty values are skipped.
+	 * @param int|null     $timestamp Fixed "now", for tests.
 	 *
 	 * @return self
 	 *
-	 * @throws \InvalidArgumentException When $context is empty.
-	 * @throws \ValueError                When $secret is empty.
+	 * @throws \InvalidArgumentException When $context is empty, or the
+	 *                                   secret or a retired one is too short.
 	 */
 	public static function derived(
 		#[\SensitiveParameter]
@@ -476,9 +483,16 @@ final readonly class Signer {
 			throw new \InvalidArgumentException( 'A derived signer needs a context: what its tokens are for.' );
 		}
 
+		if ( strlen( $secret ) < self::MIN_SECRET_BYTES ) {
+			throw new \InvalidArgumentException(
+				'A derived signer\'s shared secret must be at least ' . self::MIN_SECRET_BYTES . ' bytes. '
+				. 'Generate one with bin2hex( random_bytes( 32 ) ).'
+			);
+		}
+
 		$derive = static fn( string $shared ): string => bin2hex( hash_hkdf( 'sha256', $shared, 32, $context ) );
 
-		return new self( $derive( $secret ), array_map( $derive, array_values( $previous ) ), $timestamp );
+		return new self( $derive( $secret ), array_map( $derive, self::retired_secrets( $previous ) ), $timestamp );
 	}
 
 	/**

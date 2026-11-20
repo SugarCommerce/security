@@ -52,6 +52,28 @@ final class HardeningTest extends TestCase {
 		Signer::derived( self::SECRET, '' );
 	}
 
+	public function test_a_derived_signer_refuses_a_short_shared_secret(): void {
+		// The derived key is always 64 hex characters, so without this a
+		// one-byte secret would pass the constructor's length check, and
+		// one captured token would let a forger try every one-byte secret.
+		$this->expectException( \InvalidArgumentException::class );
+
+		Signer::derived( 'short', 'app/links/v1' );
+	}
+
+	public function test_a_derived_signer_refuses_a_short_retired_secret(): void {
+		$this->expectException( \InvalidArgumentException::class );
+
+		Signer::derived( self::SECRET, 'app/links/v1', array( 'short' ) );
+	}
+
+	public function test_a_derived_signer_skips_empty_retired_secrets(): void {
+		// As the constructor does: an unset getenv() is false.
+		$signer = Signer::derived( self::SECRET, 'app/links/v1', array( '', false, null ) );
+
+		$this->assertSame( 0, $signer->__debugInfo()['previous'] );
+	}
+
 	public function test_a_retired_shared_secret_still_verifies_through_derivation(): void {
 		$old   = Signer::derived( self::SECRET2, 'app/links' )->sign( 'ns', array( 'x' => 1 ), 60 );
 		$after = Signer::derived( self::SECRET, 'app/links', array( self::SECRET2 ) );
