@@ -249,14 +249,23 @@ final class Verifier {
 			return Verification::unanswered( Reason::Unreachable );
 		}
 
-		$raw  = (string) wp_remote_retrieve_body( $response );
-		$body = json_validate( $raw ) ? json_decode( $raw, true ) : null;
+		$raw    = (string) wp_remote_retrieve_body( $response );
+		$body   = json_validate( $raw ) ? json_decode( $raw, true ) : null;
+		$status = (int) wp_remote_retrieve_response_code( $response );
 
-		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+		if ( 200 !== $status ) {
+			// A 4xx is Cloudflare refusing the request -- and the request
+			// carries the visitor's token, so it may be theirs to cause. It
+			// is a rejection, not Cloudflare being unavailable, or a plugin
+			// that fails open would let through anybody who could make
+			// Cloudflare answer 400 (or 429, by flooding it). Only a server
+			// error there is Cloudflare having a bad hour.
+			$reason = $status >= 400 && $status < 500 ? Reason::Rejected : Reason::HttpError;
+
 			// Whatever error codes came with it are kept, for the log.
 			return is_array( $body )
-				? Verification::from_siteverify( $body )->refused( Reason::HttpError )
-				: Verification::unanswered( Reason::HttpError );
+				? Verification::from_siteverify( $body )->refused( $reason )
+				: Verification::unanswered( $reason );
 		}
 
 		if ( ! is_array( $body ) || ! is_bool( $body['success'] ?? null ) ) {

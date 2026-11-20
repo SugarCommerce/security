@@ -310,6 +310,18 @@ final class TurnstileTest extends TestCase {
 		$this->assertInstanceOf( WP_Error::class, $this->turnstile( array( 'fail_open' => true ) )->verify( 'tok', 'signup' ) );
 	}
 
+	public function test_a_request_cloudflare_refused_is_never_let_through_by_fail_open(): void {
+		// The request carries the visitor's token, so a 4xx may be theirs to
+		// cause: it is a refusal, not Cloudflare being down.
+		$GLOBALS['ts_responses'] = array(
+			ts_answer( array( 'success' => false, 'error-codes' => array( 'bad-request' ) ), 400 ),
+			array( 'response' => array( 'code' => 429 ), 'body' => '' ),
+		);
+
+		$this->assertSame( 'demo_turnstile_failed', $this->turnstile( array( 'fail_open' => true ) )->verify( 'crafted', 'signup' )->get_error_code() );
+		$this->assertSame( 'demo_turnstile_failed', $this->turnstile( array( 'fail_open' => true ) )->verify( 'flood', 'signup' )->get_error_code() );
+	}
+
 	public function test_the_failed_action_says_what_happened_and_whether_they_got_through(): void {
 		$this->turnstile( array( 'fail_open' => true ) )->verify( 'tok', 'signup', array( 'ip' => '192.0.2.1' ) );
 

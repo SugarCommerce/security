@@ -99,6 +99,29 @@ final class VerifierTest extends TestCase {
 		}
 	}
 
+	public function test_a_client_error_is_a_rejection_and_not_cloudflare_unavailable(): void {
+		// A 4xx answers the request, and the request carries the visitor's
+		// token: were it "unavailable", a plugin that fails open would let
+		// through anybody who could make Cloudflare answer 400 or 429.
+		$GLOBALS['ts_responses'] = array(
+			ts_answer( array( 'success' => false, 'error-codes' => array( 'bad-request' ) ), 400 ),
+			array( 'response' => array( 'code' => 429 ), 'body' => '' ),
+			ts_answer( array( 'success' => false, 'error-codes' => array( 'invalid-input-secret' ) ), 401 ),
+		);
+
+		$verifier = new Verifier( self::SECRET );
+		$bad      = $verifier->verify( 'tok' );
+		$busy     = $verifier->verify( 'tok' );
+		$secret   = $verifier->verify( 'tok' );
+
+		$this->assertSame( array( Reason::Rejected, Reason::Rejected ), array( $bad->reason, $busy->reason ) );
+		$this->assertSame( array( 'bad-request' ), $bad->codes, 'The codes are kept for the log.' );
+		$this->assertFalse( $bad->unavailable() );
+		$this->assertFalse( $busy->unavailable() );
+		$this->assertFalse( $bad->success );
+		$this->assertTrue( $secret->misconfigured(), 'A secret Cloudflare does not accept is still a configuration problem.' );
+	}
+
 	public function test_a_rejection_keeps_cloudflares_codes(): void {
 		$GLOBALS['ts_responses'][] = ts_answer( array( 'success' => false, 'error-codes' => array( 'invalid-input-response', 42 ) ) );
 

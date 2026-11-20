@@ -49,7 +49,8 @@ enum Reason: string {
 	case Unreachable = 'unreachable';
 
 	/**
-	 * Cloudflare answered with something other than 200.
+	 * Cloudflare answered with a server error, or anything else that is
+	 * neither 200 nor a 4xx.
 	 */
 	case HttpError = 'http_error';
 
@@ -59,7 +60,8 @@ enum Reason: string {
 	case Unreadable = 'unreadable';
 
 	/**
-	 * Cloudflare said no; see the error codes.
+	 * Cloudflare said no; see the error codes. A 4xx answer is one too:
+	 * the request it refused carried the visitor's token.
 	 */
 	case Rejected = 'rejected';
 
