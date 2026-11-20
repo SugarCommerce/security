@@ -182,7 +182,7 @@ no proxy trusted). A site behind a proxy says who the visitor is with
 empty action, or no identity and no address (a command line), throws.
 
 A store that cannot count — the table not installed, the database refusing —
-refuses the attempt by default, as the retired package did by throwing.
+refuses the attempt by default.
 `$limit->hit( 5, 600, fail_open: true )` lets it through for one call, and
 `$limiter->fail_open()` for every call, where an outage of the counter must not
 be an outage of what it protects. Either way it is reported (`error_log()`, or
@@ -273,59 +273,27 @@ Everything here that asks the time reads `SugarCommerce\Dates\Clock`, so a test
 can see a link expire, a window roll over or a code change without waiting:
 `Clock::freeze( 1_800_000_000 )`, `Clock::advance( 61 )`, `Clock::reset()`.
 
-## Moving from arraypress/wp-*
+## Security
 
-From `arraypress/wp-signed-tokens`, `wp-encryption-utils`, `wp-generate-utils`,
-`wp-rate-limit` and `wp-turnstile`. Tokens already emailed, values already
-encrypted and counters already kept carry on working: the key derivations are
-unchanged, and every stored format is still read (new values are written as
-`v3:`, below). Keys, site digests, rate-limit counter names and
-Turnstile key fingerprints are now made by core's `wp_hash( $data, $scheme,
-'sha256' )`, which is byte for byte the HMAC they were made with before
-(`tests/CoreHashTest.php` holds values from the old code).
+What each part defends against:
 
-| Old | New |
-|---|---|
-| `ArrayPress\SignedTokens\TokenSigner` | `SugarCommerce\Security\Tokens\Signer` — same methods |
-| `ArrayPress\SignedTokens\{Token, Reason, Ttl}` | `SugarCommerce\Security\Tokens\{Token, Reason, Ttl}` |
-| `ArrayPress\SignedTokens\Base64Url` | `SugarCommerce\Security\Base64Url` |
-| `Secret::from_salts( $purpose )` | `Keys::signing( $purpose )` |
-| `Secret::signer( $purpose, $timestamp )` | `Signer::site( $purpose, $timestamp )` |
-| `ArrayPress\SignedTokens\Clock::now()` | `SugarCommerce\Dates\Clock::time()`; `freeze`, `advance`, `use`, `reset` as they were |
-| `new TokenSigner( $secret, $previous )` | unchanged, but a retired secret under 32 bytes now throws, and an expiry with a leading zero is `Malformed` |
-| `ArrayPress\EncryptionUtils\Manager` | `SugarCommerce\Security\Encryption\Secrets` — same constructor and methods |
-| `Manager::encrypt()` / `decrypt()` / `is_encrypted()` | unchanged on `Secrets`, and on `Encryption\Cipher` alone |
-| `Manager::encrypt( '0' )` | now encrypted; it was returned as it was |
-| `ArrayPress\Generate\{Code, Slug, Uuid}` | `SugarCommerce\Security\{Code, Slug, Uuid}` |
-| `Token::hex()`, `url_safe()`, `alphanumeric()`, `sanitize_hex()`, `is_hex()` | `Random::…` |
-| `Token::api_key( $prefix )` | `ApiKey::make( $prefix )` |
-| `Token::matches( $key, $hash )` | `ApiKey::matches( $key, $hash )` |
-| `Uuid::is_valid( $uuid, $version )` | unchanged; a version outside 1–8 is false, and a trailing newline is refused |
-| `ArrayPress\RateLimit\*` | `SugarCommerce\Security\RateLimit\*` — `Limiter`, `Limit`, `Decision`, `Store`, `Stores\*` |
-| `$limiter->for( $action, '' )` / `Rules::hit( $action, '' )` unlimited | counted against the visitor's address (`Limiter::client()`); no address, or no action, throws |
-| `Limiter::hit( '' , … )` unlimited | throws `InvalidArgumentException` |
-| a store that cannot count lets the attempt through | refused and reported; `hit( …, fail_open: true )` or `$limiter->fail_open()` to let it through |
-| `Verifier` accepting an answer with no hostname or action | refused (`wrong_hostname` / `wrong_action`) when one is expected, as the SaaS verifier did |
-| `new Cipher( $prefix, $short_key )` | a key under 32 bytes throws; read its old values with `also_open( $short_key )` |
-| `Cipher` writing `v2:` under the shared key | `v3:` under a per-purpose key; `v2:` still read, `is_legacy_format()` true |
-| `ArrayPress\Turnstile\*` | `SugarCommerce\Security\Turnstile\*` — every class, option and hook name |
-| `arraypress/wp-composer-assets` (Turnstile's module URL) | `SugarCommerce\Plugin\Assets`, required (the family's one asset-URL resolver) |
-| `Uuid::v4()` | unchanged; now core's `wp_generate_uuid4()`. `is_valid()` stays its own, stricter than `wp_is_uuid()` |
+* **A forged or edited link** — HMAC-SHA256 under a key derived per purpose, compared in constant time; a forged token is never reported as `Expired`.
+* **A link used for another purpose** — the namespace is mixed into the key, so a `password-reset` token never verifies as a `magic-link`.
+* **A guessable secret** — a signing secret, a retired one, a derived signer's shared secret or a cipher key of your own under 32 bytes throws; placeholder salts are never used as key material.
+* **A leaked database dump** — AES-256-GCM, so a value altered in the database fails to decrypt instead of decrypting to something else; each purpose has its own key.
+* **Secrets in logs and bug reports** — `var_dump()` and `print_r()` show `[redacted]`, and every secret argument is a `#[\SensitiveParameter]`.
+* **A burst of attempts** — one atomic increment per attempt; an IPv6 caller counts as its /64; a caller with nothing to count against counts against their address; a counter that cannot count refuses by default.
+* **A script at a form** — a Turnstile token is held to the site's hostnames, its form and one use; a 4xx from Cloudflare is a refusal, so a visitor cannot make the check "unavailable" and slip through a policy that fails open.
+* **A replayed or guessed two-factor code** — compared in constant time across the whole window; `verify_after()` refuses a step already used; recovery codes are stored with `password_hash()`.
+* **A stolen key table** — API keys are stored as digests, compared in constant time; visitor addresses are kept as keyed hashes.
 
-New: `Signer::derived()`, `Keys::derive()`, `Cipher::encrypt_once()`,
-`reencrypt()`, `seal()`, `open()`, `also_open()` and the `$purpose` argument,
-`Limiter::client()`, `fail_open()` and `on_failure()`, `Decision::$failed`, `Secrets::cipher()`, `Random::id()`, `ApiKey::digest()` and its
-`$shown`, `Slug::clean()`, `RateLimit\Rules`, `Stores\Apcu`, Turnstile's
-`ErrorCode`, `Verification::errors()` and `has()`, `Verifier::passes()`,
-`for_hostnames()`, `for_action()` and `is_test_secret( $secret, true )`, and
-from the retired SugarCommerce packages `TwoFactor\{Totp, Algorithm,
-RecoveryCodes}`, `Base32`, `Hash` and `FormGuard`.
+## Layout
 
-Not brought over from those packages: the sliding-window limiter (fixed windows
-tell a client exactly when to come back), the SQLite and file rate-limit stores
-(WordPress has the table), and web-security's cookie sessions, CSRF tokens,
-flash messages and magic-link sessions (WordPress has nonces and auth cookies),
-and its libsodium sealer and file sealing (the cipher here covers values).
+`Tokens/` signed links, `Encryption/` the cipher and `Secrets`, `RateLimit/`
+the limiter and its stores, `Turnstile/` Cloudflare Turnstile, `TwoFactor/`
+TOTP and recovery codes, and at the top the small pieces (`Keys`, `Random`,
+`Code`, `ApiKey`, `Uuid`, `Slug`, `Hash`, `FormGuard`). `Traits/<Class>/` holds
+the jobs a larger class is split into.
 
 ## Requirements
 
