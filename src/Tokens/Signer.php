@@ -15,6 +15,8 @@ namespace SugarCommerce\Security\Tokens;
 use SugarCommerce\Dates\Clock;
 use SugarCommerce\Security\Base64Url;
 use SugarCommerce\Security\Keys;
+use SugarCommerce\Security\Models\Tokens\Reason;
+use SugarCommerce\Security\Models\Tokens\Token;
 
 /**
  * Class Signer

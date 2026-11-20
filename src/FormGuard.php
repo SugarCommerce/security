@@ -13,8 +13,8 @@ declare( strict_types=1 );
 namespace SugarCommerce\Security;
 
 use SugarCommerce\Dates\Clock;
+use SugarCommerce\Security\Models\Tokens\Token;
 use SugarCommerce\Security\Tokens\Signer;
-use SugarCommerce\Security\Tokens\Token;
 
 /**
  * Class FormGuard

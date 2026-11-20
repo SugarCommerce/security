@@ -12,6 +12,8 @@ declare( strict_types=1 );
 
 namespace SugarCommerce\Security\RateLimit;
 
+use SugarCommerce\Security\Models\RateLimit\Decision;
+
 /**
  * Returned by {@see Limiter::for()}. Holds the counter's name, so a call
  * site states the allowance and nothing else:

@@ -20,7 +20,7 @@ namespace SugarCommerce\Security\Tests\TwoFactor;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SugarCommerce\Security\TwoFactor\Algorithm;
+use SugarCommerce\Security\Models\TwoFactor\Algorithm;
 use SugarCommerce\Security\Base32;
 use SugarCommerce\Security\TwoFactor\Totp;
 

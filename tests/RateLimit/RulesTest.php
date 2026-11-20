@@ -14,7 +14,7 @@ namespace SugarCommerce\Security\Tests\RateLimit;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SugarCommerce\Security\RateLimit\Decision;
+use SugarCommerce\Security\Models\RateLimit\Decision;
 use SugarCommerce\Security\RateLimit\Limiter;
 use SugarCommerce\Security\RateLimit\Rules;
 use SugarCommerce\Security\RateLimit\Stores\Memory;

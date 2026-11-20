@@ -9,7 +9,7 @@ declare( strict_types=1 );
 
 namespace SugarCommerce\Security\Tests\RateLimit;
 
-use SugarCommerce\Security\RateLimit\Decision;
+use SugarCommerce\Security\Models\RateLimit\Decision;
 use SugarCommerce\Security\RateLimit\Limiter;
 use SugarCommerce\Security\RateLimit\Store;
 use SugarCommerce\Security\RateLimit\Stores\Memory;

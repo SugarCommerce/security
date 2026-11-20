@@ -10,19 +10,19 @@
 
 declare( strict_types=1 );
 
-namespace SugarCommerce\Security\Tokens;
+namespace SugarCommerce\Security\Models\Tokens;
 
 use SugarCommerce\Dates\Clock;
 
 /**
  * Class Token
  *
- * Only ever constructed by {@see Signer} after a signature has been
+ * Only ever constructed by {@see \SugarCommerce\Security\Tokens\Signer} after a signature has been
  * verified, so holding one of these means the payload is authentic — it
  * came from something holding your secret and has not been altered.
  *
  * It does **not** mean the token is unused. These are stateless; see
- * {@see Signer} on single-use handling.
+ * {@see \SugarCommerce\Security\Tokens\Signer} on single-use handling.
  *
  * @since 1.0.0
  */

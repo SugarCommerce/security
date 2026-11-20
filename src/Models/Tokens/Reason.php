@@ -10,12 +10,12 @@
 
 declare( strict_types=1 );
 
-namespace SugarCommerce\Security\Tokens;
+namespace SugarCommerce\Security\Models\Tokens;
 
 /**
  * Enum Reason
  *
- * Returned by {@see Signer::inspect()} so the caller can say
+ * Returned by {@see \SugarCommerce\Security\Tokens\Signer::inspect()} so the caller can say
  * "this link has expired, request a new one" instead of a flat
  * "invalid link" for every failure.
  *

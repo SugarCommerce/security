@@ -10,7 +10,7 @@
 
 declare( strict_types=1 );
 
-namespace SugarCommerce\Security\TwoFactor;
+namespace SugarCommerce\Security\Models\TwoFactor;
 
 /**
  * Enum Algorithm

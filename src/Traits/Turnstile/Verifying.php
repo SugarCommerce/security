@@ -12,7 +12,7 @@ declare( strict_types=1 );
 
 namespace SugarCommerce\Security\Traits\Turnstile;
 
-use SugarCommerce\Security\Turnstile\Verification;
+use SugarCommerce\Security\Models\Turnstile\Verification;
 use SugarCommerce\Security\Turnstile\Verifier;
 use WP_Error;
 

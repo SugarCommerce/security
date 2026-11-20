@@ -9,8 +9,8 @@ declare( strict_types=1 );
 
 namespace SugarCommerce\Security\Tests\Turnstile;
 
-use SugarCommerce\Security\Turnstile\Reason;
-use SugarCommerce\Security\Turnstile\Verification;
+use SugarCommerce\Security\Models\Turnstile\Reason;
+use SugarCommerce\Security\Models\Turnstile\Verification;
 use PHPUnit\Framework\TestCase;
 
 final class VerificationTest extends TestCase {

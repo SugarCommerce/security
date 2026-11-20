@@ -13,6 +13,8 @@ declare( strict_types=1 );
 namespace SugarCommerce\Security\Turnstile;
 
 use SensitiveParameter;
+use SugarCommerce\Security\Models\Turnstile\Reason;
+use SugarCommerce\Security\Models\Turnstile\Verification;
 
 /**
  * Asks Cloudflare whether a token is real, and checks what it leaves to us.

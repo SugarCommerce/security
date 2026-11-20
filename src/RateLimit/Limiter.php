@@ -14,6 +14,7 @@ namespace SugarCommerce\Security\RateLimit;
 
 use InvalidArgumentException;
 use SugarCommerce\Dates\Clock;
+use SugarCommerce\Security\Models\RateLimit\Decision;
 use SugarCommerce\Security\RateLimit\Stores\Fallback;
 use SugarCommerce\Security\RateLimit\Stores\ObjectCache;
 use SugarCommerce\Security\RateLimit\Stores\Table;

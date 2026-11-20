@@ -9,7 +9,7 @@ declare( strict_types=1 );
 
 namespace SugarCommerce\Security\Tests\RateLimit;
 
-use SugarCommerce\Security\RateLimit\Decision;
+use SugarCommerce\Security\Models\RateLimit\Decision;
 use PHPUnit\Framework\TestCase;
 
 final class DecisionTest extends TestCase {

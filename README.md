@@ -47,7 +47,7 @@ $url   = add_query_arg( 'download', $token, home_url( '/' ) );
 // When it comes back:
 $link = Signer::site( 'downloads' )->inspect( 'file', $_GET['download'] ?? '' );
 
-if ( $link instanceof \SugarCommerce\Security\Tokens\Token ) {
+if ( $link instanceof \SugarCommerce\Security\Models\Tokens\Token ) {
 	serve_file( $link->int( 'order' ), $link->int( 'file' ) );
 } else {
 	wp_die( esc_html( $link->public_message() ) ); // "This link has expired. Please request a new one."
@@ -292,8 +292,11 @@ What each part defends against:
 `Tokens/` signed links, `Encryption/` the cipher and `Secrets`, `RateLimit/`
 the limiter and its stores, `Turnstile/` Cloudflare Turnstile, `TwoFactor/`
 TOTP and recovery codes, and at the top the small pieces (`Keys`, `Random`,
-`Code`, `ApiKey`, `Uuid`, `Slug`, `Hash`, `FormGuard`). `Traits/<Class>/` holds
-the jobs a larger class is split into.
+`Code`, `ApiKey`, `Uuid`, `Slug`, `Hash`, `FormGuard`). `Models/` holds the data
+shapes and nothing that does work, by the same areas: a rate-limit `Decision`, a
+verified `Token` and why one was refused (`Tokens/Reason`), a Turnstile
+`Verification` with its `Reason` and Cloudflare `ErrorCode`, and the TOTP
+`Algorithm`. `Traits/<Class>/` holds the jobs a larger class is split into.
 
 ## Requirements
 

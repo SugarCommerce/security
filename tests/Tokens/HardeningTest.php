@@ -15,7 +15,7 @@ namespace SugarCommerce\Security\Tests\Tokens;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SugarCommerce\Security\Tokens\Reason;
+use SugarCommerce\Security\Models\Tokens\Reason;
 use SugarCommerce\Security\Tokens\Signer;
 
 final class HardeningTest extends TestCase {

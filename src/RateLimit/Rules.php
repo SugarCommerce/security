@@ -12,6 +12,8 @@ declare( strict_types=1 );
 
 namespace SugarCommerce\Security\RateLimit;
 
+use SugarCommerce\Security\Models\RateLimit\Decision;
+
 /**
  * Class Rules
  *

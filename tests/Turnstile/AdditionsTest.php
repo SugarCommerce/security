@@ -14,10 +14,10 @@ declare( strict_types=1 );
 namespace SugarCommerce\Security\Tests\Turnstile;
 
 use PHPUnit\Framework\TestCase;
-use SugarCommerce\Security\Turnstile\ErrorCode;
-use SugarCommerce\Security\Turnstile\Reason;
+use SugarCommerce\Security\Models\Turnstile\ErrorCode;
+use SugarCommerce\Security\Models\Turnstile\Reason;
+use SugarCommerce\Security\Models\Turnstile\Verification;
 use SugarCommerce\Security\Turnstile\Turnstile;
-use SugarCommerce\Security\Turnstile\Verification;
 use SugarCommerce\Security\Turnstile\Verifier;
 
 final class AdditionsTest extends TestCase {

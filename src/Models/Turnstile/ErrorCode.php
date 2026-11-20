@@ -10,7 +10,7 @@
 
 declare( strict_types=1 );
 
-namespace SugarCommerce\Security\Turnstile;
+namespace SugarCommerce\Security\Models\Turnstile;
 
 /**
  * Enum ErrorCode

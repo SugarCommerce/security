@@ -10,7 +10,7 @@
 
 declare( strict_types=1 );
 
-namespace SugarCommerce\Security\RateLimit;
+namespace SugarCommerce\Security\Models\RateLimit;
 
 /**
  * Allowed or not, how much is left, and when the window starts again.

@@ -14,6 +14,7 @@ namespace SugarCommerce\Security\TwoFactor;
 
 use SugarCommerce\Dates\Clock;
 use SugarCommerce\Security\Base32;
+use SugarCommerce\Security\Models\TwoFactor\Algorithm;
 
 /**
  * Class Totp

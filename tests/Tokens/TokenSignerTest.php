@@ -15,8 +15,8 @@ namespace SugarCommerce\Security\Tests\Tokens;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCommerce\Security\Base64Url;
-use SugarCommerce\Security\Tokens\Reason;
-use SugarCommerce\Security\Tokens\Token;
+use SugarCommerce\Security\Models\Tokens\Reason;
+use SugarCommerce\Security\Models\Tokens\Token;
 use SugarCommerce\Security\Tokens\Signer;
 
 final class TokenSignerTest extends TestCase {
