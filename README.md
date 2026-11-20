@@ -26,6 +26,7 @@ read against one clock a test can stop.
 * Put Cloudflare Turnstile on a form, and tell the owner when it stops working
 * Add two-factor sign-in with any authenticator app, with recovery codes
 * Stop form bots without a captcha, and count visitors without keeping their addresses
+* Print an SVG somebody else wrote -- an icon, a logo -- with nothing in it that runs
 
 ## Installation
 
@@ -267,6 +268,24 @@ if ( FormGuard::trapped( $_POST[ FormGuard::TRAP ] ?? '' ) || ! $guard->human( $
 $visitor = Hash::site( 'visitors' )->ip( $ip ); // keyed: comparable, not reversible
 ```
 
+## SVG somebody else wrote
+
+An SVG inlined into a page runs its scripts and event handlers with the page's
+privileges -- in the admin, an administrator's. `Svg` parses it as XML (no
+network, no entities, no DOCTYPE, 64 KB at most) and rebuilds it from an
+allow-list of shapes and presentation attributes: scripts, event handlers,
+`<style>`, `<foreignObject>`, links, images, animation and text are dropped,
+and a `href` or `url()` may only point inside the SVG. sugarcommerce/fields'
+icon sets print every icon through it.
+
+```php
+use SugarCommerce\Security\Svg;
+
+$clean = Svg::sanitize( $markup );                       // '' when it is not an SVG worth drawing
+echo Svg::render( $clean, [ 'size' => 20 ] );            // decorative: aria-hidden
+echo Svg::render( $clean, [ 'label' => 'Cart' ] );       // an image named "Cart"
+```
+
 ## Freezing the clock
 
 Everything here that asks the time reads `SugarCommerce\Dates\Clock`, so a test
@@ -285,6 +304,7 @@ What each part defends against:
 * **A burst of attempts** — one atomic increment per attempt; an IPv6 caller counts as its /64; a caller with nothing to count against counts against their address; a counter that cannot count refuses by default.
 * **A script at a form** — a Turnstile token is held to the site's hostnames, its form and one use; a 4xx from Cloudflare is a refusal, so a visitor cannot make the check "unavailable" and slip through a policy that fails open.
 * **A replayed or guessed two-factor code** — compared in constant time across the whole window; `verify_after()` refuses a step already used; recovery codes are stored with `password_hash()`.
+* **A hostile SVG** — rebuilt from an allow-list after an XML parse that fetches nothing and refuses a DOCTYPE (so no entity expansion or external entity); event handlers, scripts, styles and outside links are dropped, not escaped.
 * **A stolen key table** — API keys are stored as digests, compared in constant time; visitor addresses are kept as keyed hashes.
 
 ## Layout
@@ -292,7 +312,7 @@ What each part defends against:
 `Tokens/` signed links, `Encryption/` the cipher and `Secrets`, `RateLimit/`
 the limiter and its stores, `Turnstile/` Cloudflare Turnstile, `TwoFactor/`
 TOTP and recovery codes, and at the top the small pieces (`Keys`, `Random`,
-`Code`, `ApiKey`, `Uuid`, `Slug`, `Hash`, `FormGuard`). `Models/` holds the data
+`Code`, `ApiKey`, `Uuid`, `Slug`, `Hash`, `FormGuard`, `Svg`). `Models/` holds the data
 shapes and nothing that does work, by the same areas: a rate-limit `Decision`, a
 verified `Token` and why one was refused (`Tokens/Reason`), a Turnstile
 `Verification` with its `Reason` and Cloudflare `ErrorCode`, and the TOTP
